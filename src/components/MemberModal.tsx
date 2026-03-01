@@ -1,5 +1,5 @@
 import React from "react";
-import { X } from "lucide-react";
+import { X, MessageSquare, Smartphone } from "lucide-react";
 import { motion } from "motion/react";
 import { Member } from "../types";
 
@@ -32,7 +32,31 @@ export default function MemberModal({
   onClose,
   onSave
 }: MemberModalProps) {
+  const [sendingStatus, setSendingStatus] = React.useState(false);
+
   if (!isOpen) return null;
+
+  const handleSendSummary = async () => {
+    setSendingStatus(true);
+    try {
+      const res = await fetch("/api/admin/send-member-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: memberForm.phone }),
+        credentials: 'include'
+      });
+      if (res.ok) {
+        alert("Account status sent via WhatsApp!");
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to send summary.");
+      }
+    } catch (err) {
+      alert("Error sending WhatsApp message.");
+    } finally {
+      setSendingStatus(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -132,6 +156,18 @@ export default function MemberModal({
             />
             <label htmlFor="isAdmin" className="text-sm font-bold text-gray-700 cursor-pointer">Grant Admin Privileges</label>
           </div>
+
+          {isEditing && (
+            <button
+              type="button"
+              onClick={handleSendSummary}
+              disabled={sendingStatus}
+              className="w-full flex items-center justify-center gap-2 py-4 bg-emerald-50 text-emerald-700 font-bold rounded-2xl border-2 border-emerald-100 hover:bg-emerald-100 transition-all disabled:opacity-50"
+            >
+              <Smartphone size={20} />
+              {sendingStatus ? "Sending..." : "Send Account Status via WhatsApp"}
+            </button>
+          )}
 
           <button
             type="submit"

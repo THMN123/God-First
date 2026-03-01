@@ -380,6 +380,31 @@ async function startServer() {
 
   // --- API ROUTES ---
 
+  app.post("/api/admin/send-member-summary", requireAdmin, async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "Phone number required" });
+    if (!sock || connectionStatus !== "open") {
+      return res.status(503).json({ error: "WhatsApp bot is not connected" });
+    }
+
+    try {
+      const { data: m, error } = await supabase.from("members").select("*").eq("phone", phone).single();
+      if (error || !m) return res.status(404).json({ error: "Member not found" });
+
+      const cleanPhone = m.phone.replace(/\D/g, "");
+      const fullJid = (cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone) + "@s.whatsapp.net";
+
+      const msg = `*God First Account Status update* 📈\n\nHello ${m.name},\n\nHere is your current status:\n💰 *Savings*: M${(m.savings || 0).toLocaleString()}\n💸 *Loan Balance*: M${(m.current_loan || 0).toLocaleString()}\n🎯 *Goal*: M${(m.savings_goal || 0).toLocaleString()}\n\nKeep growing! 💪`;
+
+      await sock.sendMessage(fullJid, { text: msg });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[MEMBER-SUMMARY] Failed:", err);
+      res.status(500).json({ error: "Failed to send member summary" });
+    }
+  });
+
+
   app.post("/api/admin/send-summaries", requireAdmin, async (req, res) => {
     console.log("[SUMMARY-BLAST] Starting...");
     if (!sock || connectionStatus !== "open") {
