@@ -899,6 +899,17 @@ async function startServer() {
   const PORT = process.env.PORT || 3000;
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`🚀 God First Server running at http://localhost:${PORT}`);
+
+    // Self-pinger to keep the server awake on Render free tier
+    const externalUrl = process.env.RENDER_EXTERNAL_URL;
+    if (externalUrl) {
+      console.log(`[KEEP-ALIVE] Internal pinger active for: ${externalUrl}`);
+      setInterval(() => {
+        fetch(`${externalUrl}/api/health`)
+          .then(() => console.log("[KEEP-ALIVE] Pinged self successfully"))
+          .catch(err => console.error("[KEEP-ALIVE] Self-ping failed:", err));
+      }, 10 * 60 * 1000); // Every 10 minutes
+    }
   });
 }
 
