@@ -28,11 +28,14 @@ const __dirname = path.dirname(__filename);
 
 // 2. Initialize Supabase with your specific .env keys
 // Note: We use the VITE_ prefix to match your .env file
-const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 
 if (!supabaseUrl) {
-  console.error("❌ ERROR: VITE_SUPABASE_URL is missing in .env");
+  console.error("❌ ERROR: VITE_SUPABASE_URL is missing in .env/environment");
+}
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn("⚠️ WARNING: SUPABASE_SERVICE_ROLE_KEY is missing. WhatsApp Bot might have permission issues on Railway.");
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -108,9 +111,15 @@ class SupabaseSessionStore extends Store {
 async function useSupabaseAuthState() {
   const readData = async (id: string) => {
     try {
-      const { data } = await supabase.from("baileys_auth").select("data").eq("id", id).single();
+      console.log(`[WA-AUTH] Reading: ${id}`);
+      const { data, error } = await supabase.from("baileys_auth").select("data").eq("id", id).single();
+      if (error && error.code !== "PGRST116") {
+        console.error(`[WA-AUTH] Read Error (${id}):`, error.message);
+        return undefined;
+      }
       return data ? JSON.parse(data.data, BufferJSON.reviver) : undefined;
     } catch (error) {
+      console.error(`[WA-AUTH] Parse Error (${id}):`, error);
       return undefined;
     }
   };
@@ -169,8 +178,19 @@ let connectionStatus: "connecting" | "open" | "close" | "qr" = "connecting";
 
 async function connectToWhatsApp(retry = true) {
   try {
+    console.log("[WA-SOCKET] Initializing...");
     const { state, saveCreds } = await useSupabaseAuthState();
-    const { version } = await fetchLatestBaileysVersion();
+    console.log("[WA-SOCKET] Auth state loaded");
+    console.log("[WA-SOCKET] Fetching Baileys version...");
+    let version;
+    try {
+      const vResult = await fetchLatestBaileysVersion();
+      version = vResult.version;
+      console.log(`[WA-SOCKET] Fetched Version: ${version.join(".")}`);
+    } catch (vErr) {
+      console.warn("[WA-SOCKET] Failed to fetch version, using default", vErr);
+      version = [6, 0, 0]; // Fallback
+    }
 
     sock = makeWASocket({
       version,
@@ -181,30 +201,33 @@ async function connectToWhatsApp(retry = true) {
 
     sock.ev.on("connection.update", async (update) => {
       const { connection, lastDisconnect, qr } = update;
+      console.log(`[WA-SOCKET] Connection Update: ${connection || "none"}`);
 
       if (qr) {
         qrCode = await QRCode.toDataURL(qr);
         connectionStatus = "qr";
-        console.log("New QR Code generated. Please scan in the web app.");
+        console.log("[WA-SOCKET] New QR Code generated.");
+      }
+
+      if (connection === "open") {
+        connectionStatus = "open";
+        qrCode = null;
+        console.log("✅ GOD FIRST WhatsApp connection opened!");
       }
 
       if (connection === "close") {
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-        console.log(`WhatsApp connection closed. Reason/StatusCode: ${statusCode}`, lastDisconnect?.error);
+        console.log(`[WA-SOCKET] Closed. Status: ${statusCode}`, lastDisconnect?.error);
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
         connectionStatus = "close";
         if (shouldReconnect) {
-          console.log("Reconnecting to WhatsApp...");
+          console.log("[WA-SOCKET] Reconnecting...");
           connectToWhatsApp();
         } else {
           console.log("WhatsApp connection logged out. Clearing auth data...");
           await supabase.from("baileys_auth").delete().neq("id", "0");
           connectToWhatsApp();
         }
-      } else if (connection === "open") {
-        connectionStatus = "open";
-        qrCode = null;
-        console.log("✅ GOD FIRST WhatsApp connection opened!");
       }
     });
 
