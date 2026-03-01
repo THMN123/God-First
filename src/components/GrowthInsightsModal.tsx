@@ -53,15 +53,15 @@ export default function GrowthInsightsModal({ isOpen, onClose }: GrowthInsightsM
             <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="bg-[#F5F5F0] w-full max-w-4xl rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden border border-white/20"
+                className="bg-[#F5F5F0] w-full max-w-4xl rounded-[2rem] md:rounded-[2.5rem] p-5 md:p-10 shadow-2xl max-h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden border border-white/20"
             >
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center justify-between mb-6 md:mb-10">
                     <div>
-                        <h3 className="text-3xl font-black tracking-tight text-gray-900">Advanced Insights</h3>
-                        <p className="text-gray-500 font-bold">In-depth performance analytics for the group</p>
+                        <h3 className="text-xl md:text-3xl font-black tracking-tight text-gray-900">Advanced Insights</h3>
+                        <p className="text-xs md:text-base text-gray-500 font-bold">Group performance analytics</p>
                     </div>
-                    <button onClick={onClose} className="p-3 bg-white hover:bg-gray-100 rounded-2xl transition-all shadow-sm">
-                        <X size={24} className="text-gray-400" />
+                    <button onClick={onClose} className="p-2 md:p-3 bg-white hover:bg-gray-100 rounded-xl md:rounded-2xl transition-all shadow-sm">
+                        <X size={20} className="md:w-6 md:h-6 text-gray-400" />
                     </button>
                 </div>
 
@@ -73,7 +73,7 @@ export default function GrowthInsightsModal({ isOpen, onClose }: GrowthInsightsM
                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
                             <input
                                 type="date"
-                                className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white border-2 border-transparent focus:border-emerald-500 outline-none transition-all font-bold shadow-sm"
+                                className="w-full pl-11 md:pl-12 pr-4 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white border-2 border-transparent focus:border-emerald-500 outline-none transition-all font-bold shadow-sm text-sm md:text-base"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
                             />
@@ -85,7 +85,7 @@ export default function GrowthInsightsModal({ isOpen, onClose }: GrowthInsightsM
                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
                             <input
                                 type="date"
-                                className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white border-2 border-transparent focus:border-emerald-500 outline-none transition-all font-bold shadow-sm"
+                                className="w-full pl-11 md:pl-12 pr-4 py-3 md:py-4 rounded-xl md:rounded-2xl bg-white border-2 border-transparent focus:border-emerald-500 outline-none transition-all font-bold shadow-sm text-sm md:text-base"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
                             />
@@ -99,15 +99,15 @@ export default function GrowthInsightsModal({ isOpen, onClose }: GrowthInsightsM
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-white p-6 rounded-3xl border border-white shadow-sm relative overflow-hidden group"
+                            className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white shadow-sm relative overflow-hidden group"
                         >
                             <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
-                                <ArrowDownLeft size={100} />
+                                <ArrowDownLeft size={80} className="md:w-[100px] md:h-[100px]" />
                             </div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Total Savings</p>
-                            <p className="text-3xl font-black text-gray-900">M{(data?.totalSavings || 0).toLocaleString()}</p>
-                            <div className="mt-2 flex items-center gap-1 text-emerald-600 font-bold text-xs">
-                                <TrendingUp size={14} />
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 md:mb-4">Total Savings</p>
+                            <p className="text-2xl md:text-3xl font-black text-gray-900">M{(data?.totalSavings || 0).toLocaleString()}</p>
+                            <div className="mt-2 flex items-center gap-1 text-emerald-600 font-bold text-[10px] md:text-xs">
+                                <TrendingUp size={12} className="md:w-3.5 md:h-3.5" />
                                 <span>Verified Contributions</span>
                             </div>
                         </motion.div>
@@ -115,14 +115,14 @@ export default function GrowthInsightsModal({ isOpen, onClose }: GrowthInsightsM
                         <motion.div
                             initial={{ opacity: 0, y: 10, delay: 0.1 }}
                             animate={{ opacity: 1, y: 0, delay: 0.1 }}
-                            className="bg-white p-6 rounded-3xl border border-white shadow-sm relative overflow-hidden group"
+                            className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white shadow-sm relative overflow-hidden group"
                         >
                             <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
-                                <ArrowUpRight size={100} />
+                                <ArrowUpRight size={80} className="md:w-[100px] md:h-[100px]" />
                             </div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Loans Granted</p>
-                            <p className="text-3xl font-black text-gray-900">M{(data?.totalLoans || 0).toLocaleString()}</p>
-                            <div className="mt-2 text-amber-600 font-bold text-xs uppercase tracking-wider">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 md:mb-4">Loans Granted</p>
+                            <p className="text-2xl md:text-3xl font-black text-gray-900">M{(data?.totalLoans || 0).toLocaleString()}</p>
+                            <div className="mt-2 text-amber-600 font-bold text-[10px] md:text-xs uppercase tracking-wider">
                                 Capital Circulation
                             </div>
                         </motion.div>
@@ -130,24 +130,24 @@ export default function GrowthInsightsModal({ isOpen, onClose }: GrowthInsightsM
                         <motion.div
                             initial={{ opacity: 0, y: 10, delay: 0.2 }}
                             animate={{ opacity: 1, y: 0, delay: 0.2 }}
-                            className="bg-white p-6 rounded-3xl border border-white shadow-sm relative overflow-hidden group"
+                            className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-white shadow-sm relative overflow-hidden group"
                         >
                             <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform">
-                                <Users size={100} />
+                                <Users size={80} className="md:w-[100px] md:h-[100px]" />
                             </div>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Active Members</p>
-                            <p className="text-3xl font-black text-gray-900">{data?.activeMembersCount || 0}</p>
-                            <div className="mt-2 text-blue-600 font-bold text-xs uppercase tracking-wider">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 md:mb-4">Active Members</p>
+                            <p className="text-2xl md:text-3xl font-black text-gray-900">{data?.activeMembersCount || 0}</p>
+                            <div className="mt-2 text-blue-600 font-bold text-[10px] md:text-xs uppercase tracking-wider">
                                 Contributing this period
                             </div>
                         </motion.div>
                     </div>
 
                     {/* Performance Leaderboard */}
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-white shadow-sm">
-                        <div className="flex items-center gap-3 mb-8">
-                            <Award className="text-amber-500" size={24} />
-                            <h4 className="text-xl font-black tracking-tight">Top Savers Leaderboard</h4>
+                    <div className="bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] border border-white shadow-sm">
+                        <div className="flex items-center gap-3 mb-6 md:mb-8">
+                            <Award className="text-amber-500 w-5 h-5 md:w-6 md:h-6" />
+                            <h4 className="text-lg md:text-xl font-black tracking-tight">Top Savers</h4>
                         </div>
 
                         {loading ? (
@@ -169,9 +169,9 @@ export default function GrowthInsightsModal({ isOpen, onClose }: GrowthInsightsM
                                         transition={{ delay: idx * 0.1 }}
                                         className="flex items-center justify-between p-5 bg-gray-50 rounded-2xl border border-gray-100 group hover:bg-emerald-50 transition-colors"
                                     >
-                                        <div className="flex items-center gap-5">
+                                        <div className="flex items-center gap-3 md:gap-5">
                                             <div className={cn(
-                                                "w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg",
+                                                "w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center font-black text-base md:text-lg",
                                                 idx === 0 ? "bg-amber-100 text-amber-600" :
                                                     idx === 1 ? "bg-gray-100 text-gray-600" :
                                                         idx === 2 ? "bg-orange-100 text-orange-600" : "bg-white text-gray-400"
@@ -179,13 +179,13 @@ export default function GrowthInsightsModal({ isOpen, onClose }: GrowthInsightsM
                                                 {idx + 1}
                                             </div>
                                             <div>
-                                                <p className="font-black text-gray-900 text-lg leading-tight">{member.name}</p>
-                                                <p className="text-xs text-gray-400 font-bold">{member.phone}</p>
+                                                <p className="font-black text-gray-900 text-base md:text-lg leading-tight">{member.name}</p>
+                                                <p className="text-[10px] text-gray-400 font-bold">{member.phone}</p>
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-2xl font-black text-emerald-600 leading-none">M{member.total.toLocaleString()}</p>
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">Total Savings</p>
+                                            <p className="text-xl md:text-2xl font-black text-emerald-600 leading-none">M{member.total.toLocaleString()}</p>
+                                            <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">Savings</p>
                                         </div>
                                     </motion.div>
                                 ))}
