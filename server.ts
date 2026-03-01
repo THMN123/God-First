@@ -532,6 +532,25 @@ async function startServer() {
         console.error("create transaction error", error);
         return res.status(500).json({ error: "Failed to create transaction" });
       }
+
+      // --- Notify Admins via WhatsApp ---
+      if (sock && connectionStatus === "open") {
+        try {
+          const { data: admins } = await supabase.from("members").select("phone, name").eq("is_admin", 1);
+          const { data: requester } = await supabase.from("members").select("name").eq("phone", member_phone).single();
+
+          const adminMsg = `🔔 *New Transaction Request*\n\n👤 Member: ${requester?.name || member_phone}\n💰 Amount: M${amount.toLocaleString()}\n📝 Type: ${type.toUpperCase()}\n📄 Reason: ${reason || "N/A"}\n\n_Please review in the Admin Approval Center._`;
+
+          for (const admin of (admins || [])) {
+            const cleanPhone = admin.phone.replace(/\D/g, "");
+            const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
+            await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: adminMsg });
+          }
+        } catch (notifyErr) {
+          console.error("Failed to notify admins:", notifyErr);
+        }
+      }
+
       res.json(data);
     } catch (err) {
       console.error("/api/transactions POST failed", err);
