@@ -512,8 +512,9 @@ export default function App() {
           className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-black/5"
         >
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-emerald-200">
+            <div className="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-emerald-200 relative">
               <ShieldCheck className="text-white w-8 h-8" />
+              <div className="absolute -top-2 -right-2 bg-amber-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full border-2 border-white shadow-sm">v1.1</div>
             </div>
             <h1 className="text-3xl font-bold text-gray-900">God First</h1>
             <p className="text-gray-500 text-center mt-2">Secure Savings & Loans Management</p>
@@ -567,7 +568,7 @@ export default function App() {
                 <span className="text-[10px] font-bold uppercase tracking-widest">WhatsApp Bot Online</span>
               </div>
             )}
-            <p className="text-[9px] text-gray-300 mt-6 uppercase tracking-widest font-bold">Version: 1.0.5 - 17:55 PM</p>
+            <p className="text-[9px] text-emerald-600 mt-6 uppercase tracking-widest font-black bg-emerald-50 px-3 py-1 rounded-full inline-block border border-emerald-100 animate-pulse">Running Version: 1.1.0 (Live)</p>
           </div>
         </motion.div>
       </div>
