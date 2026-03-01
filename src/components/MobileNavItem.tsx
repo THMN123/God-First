@@ -15,7 +15,7 @@ export default function MobileNavItem({ active, onClick, icon, label, badge }: M
     <button
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center gap-1.5 py-3 px-4 min-w-[3rem] min-h-[3rem] relative transition-all duration-300 rounded-2xl",
+        "flex flex-col items-center gap-1 py-2 md:py-3 px-2 md:px-4 min-w-[2.5rem] md:min-w-[3rem] relative transition-all duration-300 rounded-xl md:rounded-2xl flex-1",
         active ? "text-emerald-600" : "text-gray-400 hover:text-gray-600"
       )}
     >
@@ -28,7 +28,7 @@ export default function MobileNavItem({ active, onClick, icon, label, badge }: M
         )}
       </div>
       <span className={cn(
-        "text-[9px] font-black uppercase tracking-[0.15em] relative z-10 transition-colors duration-300",
+        "text-[8px] md:text-[9px] font-black uppercase tracking-tight md:tracking-[0.15em] relative z-10 transition-colors duration-300 whitespace-nowrap",
         active ? "text-emerald-700" : "text-gray-400"
       )}>
         {label}

@@ -1452,8 +1452,8 @@ export default function App() {
       />
 
       {/* Bottom Navbar for Mobile */}
-      <div className="lg:hidden fixed bottom-8 left-0 right-0 px-6 z-50">
-        <nav className="bg-white/80 backdrop-blur-xl border border-white/20 rounded-[2.5rem] px-4 py-3 flex items-center justify-around shadow-[0_20px_50px_rgba(0,0,0,0.1)]">
+      <div className="lg:hidden fixed bottom-6 left-0 right-0 px-4 md:px-6 z-50">
+        <nav className="bg-white/90 backdrop-blur-xl border border-white/20 rounded-3xl md:rounded-[2.5rem] px-2 md:px-4 py-2 md:py-3 flex items-center justify-around shadow-[0_20px_50px_rgba(0,0,0,0.1)] gap-1">
           <MobileNavItem
             active={view === "dashboard"}
             onClick={() => setView("dashboard")}
