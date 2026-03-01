@@ -565,6 +565,7 @@ export default function App() {
                 <span className="text-[10px] font-bold uppercase tracking-widest">WhatsApp Bot Online</span>
               </div>
             )}
+            <p className="text-[9px] text-gray-300 mt-6 uppercase tracking-widest font-bold">Version: 1.0.5 - 17:55 PM</p>
           </div>
         </motion.div>
       </div>
