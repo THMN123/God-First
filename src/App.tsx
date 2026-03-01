@@ -389,6 +389,9 @@ export default function App() {
       });
       if (res.ok) {
         fetchData();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Approval failed.");
       }
     } catch (err) {
       alert("Approval failed.");

@@ -639,7 +639,7 @@ async function startServer() {
     const loanRepayment = newLoan > 0 ? newLoan * 1.1 : 0;
 
     // update member record
-    await supabase
+    const { error: memberUpdateErr } = await supabase
       .from("members")
       .update({
         savings: newSavings,
@@ -648,20 +648,33 @@ async function startServer() {
       })
       .eq("phone", tr.member_phone);
 
+    if (memberUpdateErr) {
+      console.error("Member balance update failed:", memberUpdateErr);
+      return res.status(500).json({ error: "Failed to update member balances" });
+    }
+
     // mark transaction verified
-    await supabase.from("transactions").update({ status: "verified" }).eq("id", id);
+    const { error: trUpdateErr } = await supabase.from("transactions").update({ status: "verified" }).eq("id", id);
+    if (trUpdateErr) {
+      console.error("Transaction status update failed:", trUpdateErr);
+      return res.status(500).json({ error: "Failed to verify transaction" });
+    }
 
     // notify user via WhatsApp if connected
     if (sock && connectionStatus === "open") {
-      let msg = `✅ Transaction approved!\nAmount: M${tr.amount}`;
-      if (tr.type === "saving") {
-        msg += `\nNew Savings Balance: M${newSavings}`;
-      } else if (tr.type === "loan") {
-        msg += `\nNew Loan Balance: M${newLoan}`;
+      try {
+        let msg = `✅ Transaction approved!\nAmount: M${tr.amount}`;
+        if (tr.type === "saving") {
+          msg += `\nNew Savings Balance: M${newSavings}`;
+        } else if (tr.type === "loan") {
+          msg += `\nNew Loan Balance: M${newLoan}`;
+        }
+        const cleanPhone = tr.member_phone.replace(/\D/g, "");
+        const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
+        await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: msg });
+      } catch (waErr) {
+        console.error("Failed to send approval WhatsApp:", waErr);
       }
-      const cleanPhone = tr.member_phone.replace(/\D/g, "");
-      const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
-      await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: msg });
     }
 
     res.json({ success: true });
