@@ -348,9 +348,33 @@ async function startServer() {
     res.status(401).json({ error: "Unauthorized" });
   };
 
-  const requireAdmin = (req: any, res: any, next: any) => {
-    console.log(`[AUTH-CHECK] Phone: ${req.session.user?.phone}, isAdmin: ${req.session.user?.is_admin} (${typeof req.session.user?.is_admin})`);
-    if (req.session.user && (req.session.user.is_admin === 1 || req.session.user.is_admin === true || String(req.session.user.is_admin) === "1")) return next();
+  const requireAdmin = async (req: any, res: any, next: any) => {
+    if (!req.session.user) return res.status(401).json({ error: "Unauthorized" });
+
+    // 1. Check session first (fastest)
+    const isAdminInSession = req.session.user.is_admin === 1 || req.session.user.is_admin === true || String(req.session.user.is_admin) === "1";
+    if (isAdminInSession) return next();
+
+    // 2. If not in session, double-check the database (live)
+    try {
+      const { data: member, error } = await supabase
+        .from("members")
+        .select("is_admin")
+        .eq("phone", req.session.user.phone)
+        .single();
+
+      const isActuallyAdmin = member && (member.is_admin === 1 || member.is_admin === true || String(member.is_admin) === "1");
+
+      if (isActuallyAdmin) {
+        // Update session so future checks are fast
+        req.session.user.is_admin = 1;
+        req.session.save();
+        return next();
+      }
+    } catch (err) {
+      console.error("[AUTH-CHECK] DB fallback failed:", err);
+    }
+
     res.status(403).json({ error: "Admin access required" });
   };
 
