@@ -619,6 +619,42 @@ async function startServer() {
     }
   });
 
+  // --- WHATSAPP GATEWAY ---
+  app.get("/api/whatsapp/status", requireAdmin, (req, res) => {
+    res.json({ status: connectionStatus, qr: qrCode });
+  });
+
+  app.post("/api/whatsapp/reset", requireAdmin, async (req, res) => {
+    try {
+      console.log("[WA-RESET] Manual session reset requested by admin:", req.session.user?.name);
+
+      if (sock) {
+        try {
+          sock.logout();
+          sock.end(undefined);
+        } catch (e) {
+          console.warn("[WA-RESET] Error during socket closure:", e);
+        }
+      }
+
+      // Clear the auth table
+      await supabase.from("baileys_auth").delete().neq("id", "0");
+
+      // Reset variables
+      sock = null;
+      qrCode = null;
+      connectionStatus = "connecting";
+
+      // Re-initialize (will cause new QR generation)
+      connectToWhatsApp();
+
+      res.json({ success: true, message: "WhatsApp session reset. Please scan the new QR code." });
+    } catch (err) {
+      console.error("[WA-RESET] Failed:", err);
+      res.status(500).json({ error: "Failed to reset WhatsApp session" });
+    }
+  });
+
   // --- PROFILE ENDPOINTS ---
   app.get("/api/profile", requireAuth, async (req, res) => {
     try {
@@ -714,7 +750,8 @@ async function startServer() {
     // notify user via WhatsApp if connected
     if (sock && connectionStatus === "open") {
       try {
-        let msg = `✅ Transaction approved!\nAmount: M${tr.amount}`;
+        const adminName = req.session.user?.name || "Admin";
+        let msg = `✅ Transaction approved by ${adminName}!\nAmount: M${tr.amount}`;
         if (tr.type === "saving") {
           msg += `\nNew Savings Balance: M${newSavings}`;
         } else if (tr.type === "loan") {
@@ -744,7 +781,8 @@ async function startServer() {
 
     // notify user via WhatsApp if connected
     if (sock && connectionStatus === "open") {
-      let msg = `❌ Transaction rejected.\nAmount: M${tr.amount}`;
+      const adminName = req.session.user?.name || "Admin";
+      let msg = `❌ Transaction rejected by ${adminName}.\nAmount: M${tr.amount}`;
       const cleanPhone = tr.member_phone.replace(/\D/g, "");
       const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
       await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: msg });

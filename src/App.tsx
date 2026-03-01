@@ -16,7 +16,8 @@ import {
   AlertCircle,
   Trash2,
   X,
-  User
+  User,
+  RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -1443,6 +1444,27 @@ export default function App() {
                       >
                         <Send size={18} />
                         Send Monthly Summaries
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          if (confirm("Are you sure you want to reset the WhatsApp session? This will log out the current phone and require a new QR scan.")) {
+                            try {
+                              const res = await fetch("/api/whatsapp/reset", { method: "POST", credentials: 'include' });
+                              if (res.ok) {
+                                alert("Session reset! Waiting for new QR code...");
+                              } else {
+                                alert("Reset failed.");
+                              }
+                            } catch (e) {
+                              alert("Error resetting session.");
+                            }
+                          }
+                        }}
+                        className="w-full mt-4 py-3 border-2 border-red-100 text-red-600 font-bold rounded-xl hover:bg-red-50 transition-all flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw size={18} />
+                        Reset Session & Change Bot Number
                       </button>
                     </div>
                     <button className="block mx-auto text-red-600 font-bold hover:underline">Disconnect Bot</button>
