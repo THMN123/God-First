@@ -564,7 +564,11 @@ async function startServer() {
   });
 
   app.get("/api/transactions", requireAuth, async (req, res) => {
-    const { data } = await supabase.from("transactions").select("*, members(name)").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("transactions").select("*, members(name)").order("timestamp", { ascending: false });
+    if (error) {
+      console.error("Fetch transactions failed:", error);
+      return res.status(500).json({ error: error.message });
+    }
     res.json(data || []);
   });
 
