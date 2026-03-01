@@ -133,13 +133,16 @@ async function useSupabaseAuthState() {
     await supabase.from("baileys_auth").delete().eq("id", id);
   };
 
+  console.log("[WA-AUTH] Initializing state...");
   const creds = (await readData("creds")) || initAuthCreds();
+  console.log("[WA-AUTH] Credentials processing complete");
 
   return {
     state: {
       creds,
       keys: {
         get: async (type: string, ids: string[]) => {
+          console.log(`[WA-AUTH] Keys GET: ${type} (${ids.length} ids)`);
           const data: { [key: string]: any } = {};
           await Promise.all(
             ids.map(async (id) => {
@@ -292,6 +295,15 @@ async function connectToWhatsApp(retry = true) {
 connectToWhatsApp();
 
 async function startServer() {
+  console.log("--- STARTUP DIAGNOSTICS ---");
+  console.log(`Node Version: ${process.version}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Supabase URL detected: ${!!supabaseUrl}`);
+  console.log(`Service Role Key detected: ${!!process.env.SUPABASE_SERVICE_ROLE_KEY}`);
+  console.log(`Anon Key detected: ${!!process.env.VITE_SUPABASE_ANON_KEY}`);
+  console.log(`Session Secret detected: ${!!process.env.SESSION_SECRET}`);
+  console.log("---------------------------");
+
   const app = express();
   app.set('trust proxy', true);
   app.use(express.json());
