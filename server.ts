@@ -174,21 +174,25 @@ async function useSupabaseAuthState() {
 let sock: WASocket | null = null;
 let qrCode: string | null = null;
 let connectionStatus: "connecting" | "open" | "close" | "qr" = "connecting";
+let isConnecting = false;
 
 async function connectToWhatsApp(retry = true) {
+  if (isConnecting) return;
+  isConnecting = true;
+
   try {
     console.log("[WA-SOCKET] Initializing...");
     const { state, saveCreds } = await useSupabaseAuthState();
     console.log("[WA-SOCKET] Auth state loaded");
-    console.log("[WA-SOCKET] Fetching Baileys version...");
+
     let version;
     try {
       const vResult = await fetchLatestBaileysVersion();
       version = vResult.version;
-      console.log(`[WA-SOCKET] Fetched Version: ${version.join(".")}`);
+      console.log(`[WA-SOCKET] Version: ${version.join(".")}`);
     } catch (vErr) {
-      console.warn("[WA-SOCKET] Failed to fetch version, using default", vErr);
-      version = [6, 0, 0]; // Fallback
+      console.warn("[WA-SOCKET] Version fetch failed, using default", vErr);
+      version = [6, 0, 0];
     }
 
     sock = makeWASocket({
@@ -196,6 +200,10 @@ async function connectToWhatsApp(retry = true) {
       printQRInTerminal: true,
       auth: state,
       logger: pino({ level: "silent" }),
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 60000,
+      keepAliveIntervalMs: 30000,
+      syncFullHistory: false,
     });
 
     sock.ev.on("connection.update", async (update) => {
@@ -211,21 +219,24 @@ async function connectToWhatsApp(retry = true) {
       if (connection === "open") {
         connectionStatus = "open";
         qrCode = null;
+        isConnecting = false;
         console.log("✅ GOD FIRST WhatsApp connection opened!");
       }
 
       if (connection === "close") {
+        isConnecting = false;
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
         console.log(`[WA-SOCKET] Closed. Status: ${statusCode}`, lastDisconnect?.error);
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
         connectionStatus = "close";
+
         if (shouldReconnect) {
-          console.log("[WA-SOCKET] Reconnecting...");
-          connectToWhatsApp();
+          console.log("[WA-SOCKET] Reconnecting in 5s...");
+          setTimeout(connectToWhatsApp, 5000);
         } else {
-          console.log("WhatsApp connection logged out. Clearing auth data...");
+          console.log("[WA-SOCKET] Logged out. Clearing auth data...");
           await supabase.from("baileys_auth").delete().neq("id", "0");
-          connectToWhatsApp();
+          setTimeout(connectToWhatsApp, 5000);
         }
       }
     });
