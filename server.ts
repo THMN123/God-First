@@ -22,6 +22,8 @@ import dotenv from "dotenv";
 
 // 1. Load Environment Variables
 dotenv.config();
+console.log("[BOOT] God First initializing...");
+console.log(`[BOOT] CWD: ${process.cwd()}`);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
