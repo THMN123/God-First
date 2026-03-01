@@ -22,8 +22,7 @@ import dotenv from "dotenv";
 
 // 1. Load Environment Variables
 dotenv.config();
-console.log("[BOOT] God First initializing...");
-console.log(`[BOOT] CWD: ${process.cwd()}`);
+console.log("🚀 God First initializing...");
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,10 +112,8 @@ class SupabaseSessionStore extends Store {
 async function useSupabaseAuthState() {
   const readData = async (id: string) => {
     try {
-      console.log(`[WA-AUTH] Reading: ${id}`);
       const { data, error } = await supabase.from("baileys_auth").select("data").eq("id", id).single();
       if (error && error.code !== "PGRST116") {
-        console.error(`[WA-AUTH] Read Error (${id}):`, error.message);
         return undefined;
       }
       return data ? JSON.parse(data.data, BufferJSON.reviver) : undefined;
@@ -135,16 +132,13 @@ async function useSupabaseAuthState() {
     await supabase.from("baileys_auth").delete().eq("id", id);
   };
 
-  console.log("[WA-AUTH] Initializing state...");
   const creds = (await readData("creds")) || initAuthCreds();
-  console.log("[WA-AUTH] Credentials processing complete");
 
   return {
     state: {
       creds,
       keys: {
         get: async (type: string, ids: string[]) => {
-          console.log(`[WA-AUTH] Keys GET: ${type} (${ids.length} ids)`);
           const data: { [key: string]: any } = {};
           await Promise.all(
             ids.map(async (id) => {
@@ -321,12 +315,16 @@ async function startServer() {
     cookie: {
       // during development we serve over HTTP so don't require secure;
       // flip to true when the app is behind HTTPS in production
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
       sameSite: 'lax',
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
   }));
+
+  // Health check for Render/Cloud
+  app.get("/api/health", (req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
+  app.get("/health", (req, res) => res.send("OK"));
 
   app.use(cors({
     origin: true,
