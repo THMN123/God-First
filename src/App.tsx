@@ -57,6 +57,7 @@ export default function App() {
   const [memberForm, setMemberForm] = useState({ firstName: "", lastName: "", phone: "", is_admin: 0, savings: 0, current_loan: 0, location_info: "" });
   const [isEditingMember, setIsEditingMember] = useState(false);
   const [isGrowthModalOpen, setIsGrowthModalOpen] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<"all" | "saving" | "loan">("all");
 
   // Profile management state
   const [profileForm, setProfileForm] = useState({ name: "", location_info: "", savings_goal: 0 });
@@ -439,7 +440,12 @@ export default function App() {
   };
 
   const isAdmin = user?.is_admin === 1;
-  const userTransactions = transactions.filter(t => t.member_phone === user?.phone);
+  const userTransactions = transactions.filter(t => {
+    const isOwner = t.member_phone === user?.phone;
+    if (!isOwner) return false;
+    if (historyFilter === "all") return true;
+    return t.type === historyFilter;
+  });
   const pendingTransactions = transactions.filter(t => t.status === "pending");
 
   // Dynamic Growth Calculations
@@ -991,9 +997,33 @@ export default function App() {
                 <div className="p-8 border-b border-gray-50 flex items-center justify-between">
                   <h3 className="text-xl font-black tracking-tight">Transaction History</h3>
                   <div className="flex gap-2">
-                    <button className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold text-gray-600">All</button>
-                    <button className="px-4 py-2 hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-400">Savings</button>
-                    <button className="px-4 py-2 hover:bg-gray-50 rounded-xl text-xs font-bold text-gray-400">Loans</button>
+                    <button
+                      onClick={() => setHistoryFilter("all")}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                        historyFilter === "all" ? "bg-gray-100 text-gray-900" : "text-gray-400 hover:bg-gray-50"
+                      )}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setHistoryFilter("saving")}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                        historyFilter === "saving" ? "bg-emerald-100 text-emerald-900" : "text-gray-400 hover:bg-gray-50"
+                      )}
+                    >
+                      Savings
+                    </button>
+                    <button
+                      onClick={() => setHistoryFilter("loan")}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                        historyFilter === "loan" ? "bg-amber-100 text-amber-900" : "text-gray-400 hover:bg-gray-50"
+                      )}
+                    >
+                      Loans
+                    </button>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
