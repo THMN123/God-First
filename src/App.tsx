@@ -39,6 +39,7 @@ import StatCard from "./components/StatCard";
 import { PhoneForm, OtpForm } from "./components/AuthForms";
 import MemberModal from "./components/MemberModal";
 import StatementModal from "./components/StatementModal";
+import GrowthInsightsModal from "./components/GrowthInsightsModal";
 
 export default function App() {
   const [user, setUser] = useState<Member | null>(null);
@@ -55,6 +56,7 @@ export default function App() {
   const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
   const [memberForm, setMemberForm] = useState({ firstName: "", lastName: "", phone: "", is_admin: 0, savings: 0, current_loan: 0, location_info: "" });
   const [isEditingMember, setIsEditingMember] = useState(false);
+  const [isGrowthModalOpen, setIsGrowthModalOpen] = useState(false);
 
   // Profile management state
   const [profileForm, setProfileForm] = useState({ name: "", location_info: "", savings_goal: 0 });
@@ -834,8 +836,14 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-                  <h4 className="font-black text-gray-900 mb-4">Monthly Breakdown</h4>
+                <button
+                  onClick={() => setIsGrowthModalOpen(true)}
+                  className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all text-left group cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-black text-gray-900">Monthly Breakdown</h4>
+                    <ArrowUpRight className="text-gray-300 group-hover:text-emerald-600 transition-colors" size={20} />
+                  </div>
                   <div className="space-y-4">
                     {chartData.map(d => (
                       <div key={d.name} className="flex items-center justify-between">
@@ -847,7 +855,10 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                </div>
+                  <p className="mt-6 text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                    Click for deep insights <ArrowUpRight size={12} />
+                  </p>
+                </button>
                 <div className="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-emerald-100">
                   <TrendingUp size={48} className="mb-6 opacity-50" />
                   <h4 className="text-2xl font-black mb-2">{Number(userMonthlyGrowth) > 0 ? "On Track!" : "Keep Going!"}</h4>
@@ -1432,6 +1443,11 @@ export default function App() {
         member={selectedMember}
         transactions={transactions}
         onClose={() => setIsStatementModalOpen(false)}
+      />
+
+      <GrowthInsightsModal
+        isOpen={isGrowthModalOpen}
+        onClose={() => setIsGrowthModalOpen(false)}
       />
 
       {/* Bottom Navbar for Mobile */}

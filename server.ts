@@ -572,6 +572,53 @@ async function startServer() {
     res.json(data || []);
   });
 
+  app.get("/api/analytics", requireAuth, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query as { startDate?: string, endDate?: string };
+      let query = supabase
+        .from("transactions")
+        .select("amount, type, member_phone, members(name)")
+        .eq("status", "verified");
+
+      if (startDate) query = query.gte("timestamp", startDate);
+      if (endDate) query = query.lte("timestamp", endDate);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const transactions = data || [];
+      const totalSavings = transactions.filter(t => t.type === 'saving').reduce((acc, t) => acc + (t.amount || 0), 0);
+      const totalLoans = transactions.filter(t => t.type === 'loan').reduce((acc, t) => acc + (t.amount || 0), 0);
+
+      const uniqueActiveSet = new Set(transactions.map(t => t.member_phone));
+      const activeMembersCount = uniqueActiveSet.size;
+
+      // Group by member for leaderboard
+      const memberMap: Record<string, { phone: string, name: string, total: number }> = {};
+      transactions.filter(t => t.type === 'saving').forEach(t => {
+        const name = (t.members as any)?.name || t.member_phone;
+        if (!memberMap[t.member_phone]) {
+          memberMap[t.member_phone] = { phone: t.member_phone, name, total: 0 };
+        }
+        memberMap[t.member_phone].total += Number(t.amount);
+      });
+
+      const leaderboard = Object.values(memberMap)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
+
+      res.json({
+        totalSavings,
+        totalLoans,
+        activeMembersCount,
+        leaderboard
+      });
+    } catch (err) {
+      console.error("Analytics fetch failed:", err);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
   // --- PROFILE ENDPOINTS ---
   app.get("/api/profile", requireAuth, async (req, res) => {
     try {
