@@ -349,7 +349,7 @@ export default function App() {
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || !ref) return;
+    if (!amount || (type === 'saving' && !ref)) return;
 
     try {
       const res = await fetch("/api/transactions", {
@@ -912,17 +912,19 @@ export default function App() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">M-Pesa Reference ID</label>
-                    <input
-                      type="text"
-                      placeholder="Enter the 10-digit code"
-                      className="w-full px-6 py-5 rounded-3xl bg-gray-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all font-bold text-lg"
-                      value={ref}
-                      onChange={(e) => setRef(e.target.value)}
-                      required
-                    />
-                  </div>
+                  {type === 'saving' && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">M-Pesa Reference ID</label>
+                      <input
+                        type="text"
+                        placeholder="Enter the 10-digit code"
+                        className="w-full px-6 py-5 rounded-3xl bg-gray-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all font-bold text-lg"
+                        value={ref}
+                        onChange={(e) => setRef(e.target.value)}
+                        required
+                      />
+                    </div>
+                  )}
 
                   {type === 'loan' && (
                     <>
