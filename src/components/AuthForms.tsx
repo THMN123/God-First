@@ -16,7 +16,7 @@ export function PhoneForm({ phoneInput, setPhoneInput, onSubmit, loading, error 
         <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
         <input
           type="tel"
-          placeholder="e.g. 26612345678"
+          placeholder="e.g. 266... or 27..."
           className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
           value={phoneInput}
           onChange={(e) => setPhoneInput(e.target.value)}

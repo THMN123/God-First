@@ -103,7 +103,7 @@ export default function MemberModal({
             <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Phone Number</label>
             <input
               type="tel"
-              placeholder="e.g. 26612345678"
+              placeholder="e.g. 266... or 27..."
               className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all font-bold disabled:opacity-50"
               value={memberForm.phone}
               onChange={(e) => setMemberForm({ ...memberForm, phone: e.target.value })}

@@ -252,7 +252,8 @@ async function connectToWhatsApp(retry = true) {
         if (!jid) continue;
 
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
-        const phone = jid.split("@")[0].replace("266", ""); // Extract phone (SL specific 266 prefix)
+        const phoneStr = jid.split("@")[0];
+        const phone = phoneStr.startsWith("266") ? phoneStr.substring(3) : phoneStr; // Extract phone (handles LS 266 or SA 27 prefix)
 
         if (text.startsWith("!")) {
           console.log(`[WA-CMD] From ${phone}: ${text}`);
@@ -392,7 +393,7 @@ async function startServer() {
       if (error || !m) return res.status(404).json({ error: "Member not found" });
 
       const cleanPhone = m.phone.replace(/\D/g, "");
-      const fullJid = (cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone) + "@s.whatsapp.net";
+      const fullJid = (cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone) + "@s.whatsapp.net";
 
       const msg = `*God First Account Status update* 📈\n\nHello ${m.name},\n\nHere is your current status:\n💰 *Savings*: M${(m.savings || 0).toLocaleString()}\n💸 *Loan Balance*: M${(m.current_loan || 0).toLocaleString()}\n🎯 *Goal*: M${(m.savings_goal || 0).toLocaleString()}\n\nKeep growing! 💪`;
 
@@ -424,7 +425,7 @@ async function startServer() {
       for (const m of (members || [])) {
         try {
           const cleanPhone = m.phone.replace(/\D/g, "");
-          const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
+          const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
           const fullJid = `${jid}@s.whatsapp.net`;
 
           console.log(`[SUMMARY-BLAST] Sending to ${m.name} (${fullJid})...`);
@@ -486,7 +487,7 @@ async function startServer() {
 
       if (connectionStatus === "open" && sock) {
         const cleanPhone = phone.replace(/\D/g, "");
-        const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
+        const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
         await sock.sendMessage(`${jid}@s.whatsapp.net`, {
           text: `*God First Security*\n\nYour login code is: *${otp}*`
         });
@@ -603,7 +604,7 @@ async function startServer() {
 
           for (const admin of (admins || [])) {
             const cleanPhone = admin.phone.replace(/\D/g, "");
-            const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
+            const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
             await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: adminMsg });
           }
         } catch (notifyErr) {
@@ -818,7 +819,7 @@ async function startServer() {
           msg += `\nNew Loan Balance: M${newLoan}`;
         }
         const cleanPhone = tr.member_phone.replace(/\D/g, "");
-        const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
+        const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
         await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: msg });
       } catch (waErr) {
         console.error("Failed to send approval WhatsApp:", waErr);
@@ -844,7 +845,7 @@ async function startServer() {
       const adminName = req.session.user?.name || "Admin";
       let msg = `❌ Transaction rejected by ${adminName}.\nAmount: M${tr.amount}`;
       const cleanPhone = tr.member_phone.replace(/\D/g, "");
-      const jid = cleanPhone.startsWith("266") ? cleanPhone : "266" + cleanPhone;
+      const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
       await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: msg });
     }
 
