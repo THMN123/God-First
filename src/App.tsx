@@ -17,7 +17,8 @@ import {
   Trash2,
   X,
   User,
-  RefreshCw
+  RefreshCw,
+  Search
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -65,6 +66,24 @@ export default function App() {
   const [savingProfile, setSavingProfile] = useState(false);
 
   const [members, setMembers] = useState<Member[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "member">("all");
+  
+  const filteredMembers = useMemo(() => {
+    return members.filter(m => {
+      const matchesSearch = !searchQuery ||
+        (m.name && m.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (m.phone && String(m.phone).includes(searchQuery)) ||
+        (m.location_info && m.location_info.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesRole = roleFilter === "all" ||
+        (roleFilter === "admin" && m.is_admin === 1) ||
+        (roleFilter === "member" && m.is_admin !== 1);
+
+      return matchesSearch && matchesRole;
+    });
+  }, [members, searchQuery, roleFilter]);
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [whatsappStatus, setWhatsappStatus] = useState<{ status: string; qr: string | null }>({ status: "connecting", qr: null });
 
@@ -1174,19 +1193,93 @@ export default function App() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h3 className="text-xl font-black tracking-tight">Group Members</h3>
                 <button
                   onClick={handleAddMember}
-                  className="bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                  className="bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 whitespace-nowrap"
                 >
                   <Plus size={18} />
                   Add Member
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {members.map(member => (
+              {/* Advanced Search & Filtering Area */}
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
+                <div className="relative">
+                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Search size={20} />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Search by name, phone, or location..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-14 pr-5 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all font-bold text-gray-900 placeholder:text-gray-400"
+                  />
+                  {searchQuery && (
+                    <button 
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 bg-gray-100 rounded-full transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mr-2">Roles:</span>
+                  <button
+                    onClick={() => setRoleFilter("all")}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                      roleFilter === "all" ? "bg-gray-900 text-white shadow-md shadow-gray-200" : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                    )}
+                  >
+                    All Members
+                  </button>
+                  <button
+                    onClick={() => setRoleFilter("admin")}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                      roleFilter === "admin" ? "bg-emerald-100 text-emerald-800 shadow-md shadow-emerald-50" : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                    )}
+                  >
+                    Admins
+                  </button>
+                  <button
+                    onClick={() => setRoleFilter("member")}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                      roleFilter === "member" ? "bg-blue-100 text-blue-800 shadow-md shadow-blue-50" : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                    )}
+                  >
+                    Regular
+                  </button>
+                </div>
+              </div>
+
+              {filteredMembers.length === 0 ? (
+                <div className="bg-white p-12 rounded-3xl border border-gray-100 shadow-sm text-center">
+                  <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                    <Search size={32} />
+                  </div>
+                  <h4 className="text-xl font-black text-gray-900 mb-2">No members found</h4>
+                  <p className="text-gray-500 font-medium">
+                    We couldn't find anyone matching your current search or filters.
+                  </p>
+                  {(searchQuery || roleFilter !== "all") && (
+                    <button 
+                      onClick={() => { setSearchQuery(""); setRoleFilter("all"); }}
+                      className="mt-6 px-6 py-2 bg-gray-100 text-gray-900 font-bold rounded-xl hover:bg-gray-200 transition-colors inline-block"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredMembers.map(member => (
                   <div key={member.phone} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                       <Users size={80} />
@@ -1239,6 +1332,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
+              )}
             </motion.div>
           )}
 

@@ -869,10 +869,60 @@ async function startServer() {
     try {
       const { phone } = req.params;
       const memberData = req.body;
+
+      // Fetch the existing member data BEFORE we update it, to compute differences
+      const { data: oldMember } = await supabase.from("members").select("name, savings, current_loan").eq("phone", phone).single();
+
+      // Update the member record
       const { data, error } = await supabase.from("members").update(memberData).eq("phone", phone).select().single();
       if (error) return res.status(500).json({ error: error.message });
+
+      // If we successfully updated, check for financial alterations and record an audit transaction
+      if (oldMember) {
+        const newSavings = Number(memberData.savings) || 0;
+        const oldSavings = Number(oldMember.savings) || 0;
+        const savingsDiff = newSavings - oldSavings;
+
+        const newLoan = Number(memberData.current_loan) || 0;
+        const oldLoan = Number(oldMember.current_loan) || 0;
+        const loanDiff = newLoan - oldLoan;
+
+        const transactionsToInsert = [];
+
+        if (savingsDiff !== 0) {
+          transactionsToInsert.push({
+            member_phone: phone,
+            amount: savingsDiff, // Can be negative or positive
+            type: "saving",
+            status: "verified",
+            proof_ref: "MANUAL-ADMIN",
+            reason: "Manual Admin Adjustment",
+            member_savings_at_time: oldSavings
+          });
+        }
+
+        if (loanDiff !== 0) {
+          transactionsToInsert.push({
+            member_phone: phone,
+            amount: loanDiff,
+            type: "loan",
+            status: "verified",
+            proof_ref: "MANUAL-ADMIN",
+            reason: "Manual Admin Adjustment",
+            member_savings_at_time: oldSavings
+          });
+        }
+
+        // Insert bookkeeping audit records instantly
+        if (transactionsToInsert.length > 0) {
+          const { error: txErr } = await supabase.from("transactions").insert(transactionsToInsert);
+          if (txErr) console.error("[MANUAL-AUDIT-TRAIL] Failed to record manual adjustment transactions:", txErr);
+        }
+      }
+
       res.json(data);
     } catch (err) {
+      console.error("[PUT /api/members] error:", err);
       res.status(500).json({ error: "Internal error" });
     }
   });
