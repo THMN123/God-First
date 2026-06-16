@@ -15,7 +15,7 @@ export interface Transaction {
   member_phone: string;
   member_name?: string;
   amount: number;
-  type: 'saving' | 'loan';
+  type: 'saving' | 'loan' | 'repayment';
   proof_ref: string;
   reason?: string;
   member_savings_at_time?: number;

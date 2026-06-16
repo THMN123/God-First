@@ -32,7 +32,7 @@ import {
   AreaChart,
   Area
 } from "recharts";
-import { cn } from "./utils";
+import { cn, normalizePhone } from "./utils";
 import { Member, Transaction } from "./types";
 import { useMemo } from "react";
 import NavItem from "./components/NavItem";
@@ -59,7 +59,7 @@ export default function App() {
   const [memberForm, setMemberForm] = useState({ firstName: "", lastName: "", phone: "", is_admin: 0, savings: 0, current_loan: 0, location_info: "" });
   const [isEditingMember, setIsEditingMember] = useState(false);
   const [isGrowthModalOpen, setIsGrowthModalOpen] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState<"all" | "saving" | "loan">("all");
+  const [historyFilter, setHistoryFilter] = useState<"all" | "saving" | "loan" | "repayment">("all");
 
   // Profile management state
   const [profileForm, setProfileForm] = useState({ name: "", location_info: "", savings_goal: 0 });
@@ -91,7 +91,7 @@ export default function App() {
   const [amount, setAmount] = useState("");
   const [ref, setRef] = useState("");
   const [reason, setReason] = useState("");
-  const [type, setType] = useState<"saving" | "loan">("saving");
+  const [type, setType] = useState<"saving" | "loan" | "repayment">("saving");
 
   // check cookies once on load
   useEffect(() => {
@@ -199,10 +199,11 @@ export default function App() {
     setSuccessMessage("");
 
     try {
+      const normalizedPhone = normalizePhone(phoneInput);
       const res = await fetch("/api/auth/request-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneInput }),
+        body: JSON.stringify({ phone: normalizedPhone }),
         credentials: 'include'
       });
       const data = await res.json();
@@ -232,10 +233,11 @@ export default function App() {
     setError("");
 
     try {
+      const normalizedPhone = normalizePhone(phoneInput);
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneInput, code: otpInput }),
+        body: JSON.stringify({ phone: normalizedPhone, code: otpInput }),
         credentials: 'include'
       });
       const data = await res.json();
@@ -287,9 +289,10 @@ export default function App() {
         return;
       }
 
+      const normalizedMemberPhone = normalizePhone(memberForm.phone);
       const payload = {
         name: fullName,
-        phone: memberForm.phone,
+        phone: normalizedMemberPhone,
         is_admin: memberForm.is_admin,
         savings: memberForm.savings,
         current_loan: memberForm.current_loan,
@@ -298,8 +301,8 @@ export default function App() {
       };
 
       if (isEditingMember) {
-        console.log("[MEMBER] Updating member:", memberForm.phone, fullName);
-        const res = await fetch(`/api/members/${memberForm.phone}`, {
+        console.log("[MEMBER] Updating member:", normalizedMemberPhone, fullName);
+        const res = await fetch(`/api/members/${normalizedMemberPhone}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -311,7 +314,7 @@ export default function App() {
           throw new Error(errData.error || "Failed to update member");
         }
       } else {
-        console.log("[MEMBER] Inserting new member:", memberForm.phone, fullName);
+        console.log("[MEMBER] Inserting new member:", normalizedMemberPhone, fullName);
         const res = await fetch(`/api/members`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -372,7 +375,7 @@ export default function App() {
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || (type === 'saving' && !ref)) return;
+    if (!amount || ((type === 'saving' || type === 'repayment') && !ref)) return;
 
     try {
       const res = await fetch("/api/transactions", {
@@ -444,7 +447,7 @@ export default function App() {
   const handleDeleteMember = async (phone: string) => {
     if (!confirm("Are you sure you want to delete this member? This action cannot be undone.")) return;
     try {
-      const res = await fetch(`/api/members/${phone}`, {
+      const res = await fetch(`/api/members/${normalizePhone(phone)}`, {
         method: "DELETE",
         credentials: 'include'
       });
@@ -863,9 +866,12 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setIsGrowthModalOpen(true)}
-                  className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all text-left group cursor-pointer"
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setIsGrowthModalOpen(true); }}
+                  className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all text-left group cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="font-black text-gray-900">Monthly Breakdown</h4>
@@ -885,7 +891,7 @@ export default function App() {
                   <p className="mt-6 text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
                     Click for deep insights <ArrowUpRight size={12} />
                   </p>
-                </button>
+                </div>
                 <div className="bg-emerald-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-emerald-100">
                   <TrendingUp size={48} className="mb-6 opacity-50" />
                   <h4 className="text-2xl font-black mb-2">{Number(userMonthlyGrowth) > 0 ? "On Track!" : "Keep Going!"}</h4>
@@ -909,11 +915,12 @@ export default function App() {
             >
               <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
                 <h3 className="text-2xl font-black tracking-tight mb-8 text-center">New Transaction</h3>
-                <div className="flex gap-4 mb-8">
+                <div className="flex gap-4 mb-8 flex-wrap">
                   <button
                     onClick={() => setType("saving")}
+                    type="button"
                     className={cn(
-                      "flex-1 flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all",
+                      "flex-1 flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all min-w-[120px]",
                       type === "saving" ? "border-emerald-500 bg-emerald-50/50" : "border-gray-50 hover:border-emerald-100"
                     )}
                   >
@@ -923,9 +930,23 @@ export default function App() {
                     <span className="font-black text-gray-900">Deposit</span>
                   </button>
                   <button
-                    onClick={() => setType("loan")}
+                    onClick={() => setType("repayment")}
+                    type="button"
                     className={cn(
-                      "flex-1 flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all",
+                      "flex-1 flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all min-w-[120px]",
+                      type === "repayment" ? "border-blue-500 bg-blue-50/50" : "border-gray-50 hover:border-blue-100"
+                    )}
+                  >
+                    <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600">
+                      <ArrowDownLeft size={24} />
+                    </div>
+                    <span className="font-black text-gray-900">Repay Loan</span>
+                  </button>
+                  <button
+                    onClick={() => setType("loan")}
+                    type="button"
+                    className={cn(
+                      "flex-1 flex flex-col items-center gap-3 p-6 rounded-3xl border-2 transition-all min-w-[120px]",
                       type === "loan" ? "border-amber-500 bg-amber-50/50" : "border-gray-50 hover:border-amber-100"
                     )}
                   >
@@ -938,7 +959,7 @@ export default function App() {
 
                 <form onSubmit={handleSubmitTransaction} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Amount to {type === 'saving' ? 'Deposit' : 'Borrow'}</label>
+                    <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Amount to {type === 'saving' ? 'Deposit' : type === 'repayment' ? 'Repay' : 'Borrow'}</label>
                     <div className="relative">
                       <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-gray-400 text-xl">M</span>
                       <input
@@ -951,7 +972,7 @@ export default function App() {
                       />
                     </div>
                   </div>
-                  {type === 'saving' && (
+                  {(type === 'saving' || type === 'repayment') && (
                     <div className="space-y-2">
                       <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">M-Pesa Reference ID</label>
                       <input
@@ -1036,6 +1057,15 @@ export default function App() {
                       Savings
                     </button>
                     <button
+                      onClick={() => setHistoryFilter("repayment")}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-xs font-bold transition-all",
+                        historyFilter === "repayment" ? "bg-blue-100 text-blue-900" : "text-gray-400 hover:bg-gray-50"
+                      )}
+                    >
+                      Repayments
+                    </button>
+                    <button
                       onClick={() => setHistoryFilter("loan")}
                       className={cn(
                         "px-4 py-2 rounded-xl text-xs font-bold transition-all",
@@ -1072,9 +1102,10 @@ export default function App() {
                               <div className="flex items-center gap-4">
                                 <div className={cn(
                                   "w-10 h-10 rounded-xl flex items-center justify-center",
-                                  t.type === "saving" ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+                                  t.type === "saving" ? "bg-emerald-100 text-emerald-600" :
+                                  t.type === "repayment" ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"
                                 )}>
-                                  {t.type === "saving" ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+                                  {t.type === "saving" || t.type === "repayment" ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
                                 </div>
                                 <div className="flex flex-col">
                                   <span className="font-black capitalize text-gray-900">{t.type}</span>
@@ -1130,16 +1161,18 @@ export default function App() {
                         <div className="flex items-start gap-4 flex-1">
                           <div className={cn(
                             "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
-                            t.type === "saving" ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+                            t.type === "saving" ? "bg-emerald-100 text-emerald-600" :
+                            t.type === "repayment" ? "bg-blue-100 text-blue-600" : "bg-amber-100 text-amber-600"
                           )}>
-                            {t.type === "saving" ? <ArrowDownLeft size={24} /> : <ArrowUpRight size={24} />}
+                            {t.type === "saving" || t.type === "repayment" ? <ArrowDownLeft size={24} /> : <ArrowUpRight size={24} />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-black text-gray-900 text-lg leading-none">{t.member_name}</p>
                               <span className={cn(
                                 "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full",
-                                t.type === 'saving' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                                t.type === 'saving' ? 'bg-emerald-50 text-emerald-600' :
+                                t.type === 'repayment' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
                               )}>{t.type}</span>
                             </div>
                             <p className="text-2xl font-black text-gray-900 mb-2">M{t.amount.toLocaleString()}</p>

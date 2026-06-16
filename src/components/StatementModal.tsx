@@ -77,7 +77,8 @@ export default function StatementModal({ isOpen, member, transactions, onClose }
                       <td className="py-4">
                         <span className={cn(
                           "text-xs font-black uppercase tracking-widest",
-                          t.type === 'saving' ? 'text-emerald-600' : 'text-amber-600'
+                          t.type === 'saving' ? 'text-emerald-600' :
+                          t.type === 'repayment' ? 'text-blue-600' : 'text-amber-600'
                         )}>{t.type}</span>
                       </td>
                       <td className="py-4 font-black">M{t.amount.toLocaleString()}</td>

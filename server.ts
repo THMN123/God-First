@@ -24,6 +24,20 @@ import dotenv from "dotenv";
 dotenv.config();
 console.log("🚀 God First initializing...");
 
+export function normalizePhone(phone: string): string {
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.startsWith("0")) {
+    cleaned = cleaned.slice(1);
+  }
+  if (cleaned.length === 8) {
+    return "266" + cleaned;
+  }
+  if (cleaned.length === 9) {
+    return "27" + cleaned;
+  }
+  return cleaned;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -253,7 +267,7 @@ async function connectToWhatsApp(retry = true) {
 
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
         const phoneStr = jid.split("@")[0];
-        const phone = phoneStr.startsWith("266") ? phoneStr.substring(3) : phoneStr; // Extract phone (handles LS 266 or SA 27 prefix)
+        const phone = normalizePhone(phoneStr);
 
         if (text.startsWith("!")) {
           console.log(`[WA-CMD] From ${phone}: ${text}`);
@@ -320,7 +334,7 @@ async function startServer() {
   app.use(session({
     store: new SupabaseSessionStore(),
     name: 'godfirst.sid',
-    secret: "god-first-secret-key",
+    secret: process.env.SESSION_SECRET || "god-first-secret-key",
     resave: false,
     saveUninitialized: false,
     proxy: true,
@@ -389,11 +403,12 @@ async function startServer() {
     }
 
     try {
-      const { data: m, error } = await supabase.from("members").select("*").eq("phone", phone).single();
+      const normalizedPhone = normalizePhone(phone);
+      const { data: m, error } = await supabase.from("members").select("*").eq("phone", normalizedPhone).single();
       if (error || !m) return res.status(404).json({ error: "Member not found" });
 
-      const cleanPhone = m.phone.replace(/\D/g, "");
-      const fullJid = (cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone) + "@s.whatsapp.net";
+      const cleanPhone = normalizePhone(m.phone);
+      const fullJid = `${cleanPhone}@s.whatsapp.net`;
 
       const msg = `*God First Account Status update* 📈\n\nHello ${m.name},\n\nHere is your current status:\n💰 *Savings*: M${(m.savings || 0).toLocaleString()}\n💸 *Loan Balance*: M${(m.current_loan || 0).toLocaleString()}\n🎯 *Goal*: M${(m.savings_goal || 0).toLocaleString()}\n\nKeep growing! 💪`;
 
@@ -424,9 +439,8 @@ async function startServer() {
 
       for (const m of (members || [])) {
         try {
-          const cleanPhone = m.phone.replace(/\D/g, "");
-          const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
-          const fullJid = `${jid}@s.whatsapp.net`;
+          const cleanPhone = normalizePhone(m.phone);
+          const fullJid = `${cleanPhone}@s.whatsapp.net`;
 
           console.log(`[SUMMARY-BLAST] Sending to ${m.name} (${fullJid})...`);
 
@@ -456,11 +470,12 @@ async function startServer() {
   app.post("/api/auth/request-otp", async (req, res) => {
     try {
       const { phone } = req.body;
+      const normalizedPhone = normalizePhone(phone);
       // ensure the number exists in members table; create a stub if missing
       let { data: member, error: memberErr } = await supabase
         .from("members")
         .select("*")
-        .eq("phone", phone)
+        .eq("phone", normalizedPhone)
         .single();
 
       if (memberErr && memberErr.code !== "PGRST116") {
@@ -471,7 +486,7 @@ async function startServer() {
       if (!member) {
         const { data: newMember, error: insertErr } = await supabase
           .from("members")
-          .insert({ phone, name: phone, is_admin: 0 })
+          .insert({ phone: normalizedPhone, name: normalizedPhone, is_admin: 0 })
           .single();
         if (insertErr) {
           console.error("Failed to insert member during OTP request:", insertErr);
@@ -483,12 +498,11 @@ async function startServer() {
       const otp = Math.floor(1000 + Math.random() * 9000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-      await supabase.from("otps").upsert({ phone, code: otp, expires_at: expiresAt });
+      await supabase.from("otps").upsert({ phone: normalizedPhone, code: otp, expires_at: expiresAt });
 
       if (connectionStatus === "open" && sock) {
-        const cleanPhone = phone.replace(/\D/g, "");
-        const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
-        await sock.sendMessage(`${jid}@s.whatsapp.net`, {
+        const cleanPhone = normalizePhone(normalizedPhone);
+        await sock.sendMessage(`${cleanPhone}@s.whatsapp.net`, {
           text: `*God First Security*\n\nYour login code is: *${otp}*`
         });
       }
@@ -503,13 +517,14 @@ async function startServer() {
   app.post("/api/auth/verify-otp", async (req, res) => {
     try {
       const { phone, code } = req.body;
-      const { data: otpRecord } = await supabase.from("otps").select("*").eq("phone", phone).eq("code", code).single();
+      const normalizedPhone = normalizePhone(phone);
+      const { data: otpRecord } = await supabase.from("otps").select("*").eq("phone", normalizedPhone).eq("code", code).single();
 
       if (!otpRecord || new Date(otpRecord.expires_at) < new Date()) {
         return res.status(400).json({ error: "Invalid or expired code" });
       }
 
-      const { data: member } = await supabase.from("members").select("*").eq("phone", phone).single();
+      const { data: member } = await supabase.from("members").select("*").eq("phone", normalizedPhone).single();
       if (!member) {
         return res.status(404).json({ error: "Member not found" });
       }
@@ -525,7 +540,7 @@ async function startServer() {
       });
 
       // delete the OTP so it can't be reused
-      await supabase.from("otps").delete().eq("phone", phone);
+      await supabase.from("otps").delete().eq("phone", normalizedPhone);
     } catch (err) {
       console.error("/api/auth/verify-otp failed:", err);
       res.status(500).json({ error: "Internal error" });
@@ -555,12 +570,13 @@ async function startServer() {
   app.post("/api/transactions", requireAuth, async (req, res) => {
     try {
       const { member_phone, amount, type, proof_ref, reason } = req.body;
+      const normalizedPhone = normalizePhone(member_phone);
 
       // Fetch current member details for snapshot and validation
       const { data: member, error: memberError } = await supabase
         .from("members")
         .select("savings")
-        .eq("phone", member_phone)
+        .eq("phone", normalizedPhone)
         .single();
 
       if (memberError || !member) {
@@ -579,7 +595,7 @@ async function startServer() {
       const { data, error } = await supabase
         .from("transactions")
         .insert({
-          member_phone,
+          member_phone: normalizedPhone,
           amount,
           type,
           proof_ref,
@@ -598,14 +614,13 @@ async function startServer() {
       if (sock && connectionStatus === "open") {
         try {
           const { data: admins } = await supabase.from("members").select("phone, name").eq("is_admin", 1);
-          const { data: requester } = await supabase.from("members").select("name").eq("phone", member_phone).single();
+          const { data: requester } = await supabase.from("members").select("name").eq("phone", normalizedPhone).single();
 
-          const adminMsg = `🔔 *New Transaction Request*\n\n👤 Member: ${requester?.name || member_phone}\n💰 Amount: M${amount.toLocaleString()}\n📝 Type: ${type.toUpperCase()}\n📄 Reason: ${reason || "N/A"}\n\n_Please review in the Admin Approval Center._`;
+          const adminMsg = `🔔 *New Transaction Request*\n\n👤 Member: ${requester?.name || normalizedPhone}\n💰 Amount: M${amount.toLocaleString()}\n📝 Type: ${type.toUpperCase()}\n📄 Reason: ${reason || "N/A"}\n\n_Please review in the Admin Approval Center._`;
 
           for (const admin of (admins || [])) {
-            const cleanPhone = admin.phone.replace(/\D/g, "");
-            const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
-            await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: adminMsg });
+            const cleanPhone = normalizePhone(admin.phone);
+            await sock.sendMessage(`${cleanPhone}@s.whatsapp.net`, { text: adminMsg });
           }
         } catch (notifyErr) {
           console.error("Failed to notify admins:", notifyErr);
@@ -630,7 +645,11 @@ async function startServer() {
       console.error("Fetch transactions failed:", error);
       return res.status(500).json({ error: error.message });
     }
-    res.json(data || []);
+    const mapped = (data || []).map((t: any) => ({
+      ...t,
+      member_name: t.members?.name || t.member_phone
+    }));
+    res.json(mapped);
   });
 
   app.get("/api/analytics", requireAuth, async (req, res) => {
@@ -642,7 +661,9 @@ async function startServer() {
         .eq("status", "verified");
 
       if (startDate) query = query.gte("timestamp", startDate);
-      if (endDate) query = query.lte("timestamp", endDate);
+      if (endDate) {
+        query = query.lte("timestamp", `${endDate}T23:59:59.999Z`);
+      }
 
       const { data, error } = await query;
       if (error) throw error;
@@ -681,9 +702,6 @@ async function startServer() {
   });
 
   // --- WHATSAPP GATEWAY ---
-  app.get("/api/whatsapp/status", requireAdmin, (req, res) => {
-    res.json({ status: connectionStatus, qr: qrCode });
-  });
 
   app.post("/api/whatsapp/reset", requireAdmin, async (req, res) => {
     try {
@@ -719,10 +737,11 @@ async function startServer() {
   // --- PROFILE ENDPOINTS ---
   app.get("/api/profile", requireAuth, async (req, res) => {
     try {
+      const normalizedPhone = normalizePhone(req.session.user?.phone);
       const { data, error } = await supabase
         .from("members")
         .select("phone, name, location_info, savings_goal, avatar_url, savings, current_loan, loan_repayment")
-        .eq("phone", req.session.user?.phone)
+        .eq("phone", normalizedPhone)
         .single();
 
       if (error) return res.status(500).json({ error: "Failed to fetch profile" });
@@ -735,12 +754,12 @@ async function startServer() {
   app.put("/api/profile", requireAuth, async (req, res) => {
     try {
       const { name, location_info, savings_goal, avatar_url } = req.body;
-      const phone = req.session.user?.phone;
+      const normalizedPhone = normalizePhone(req.session.user?.phone);
 
       const { data, error } = await supabase
         .from("members")
         .update({ name, location_info, savings_goal, avatar_url })
-        .eq("phone", phone)
+        .eq("phone", normalizedPhone)
         .select()
         .single();
 
@@ -768,7 +787,8 @@ async function startServer() {
     }
 
     // load the affected member
-    const { data: m } = await supabase.from("members").select("*").eq("phone", tr.member_phone).single();
+    const normalizedPhone = normalizePhone(tr.member_phone);
+    const { data: m } = await supabase.from("members").select("*").eq("phone", normalizedPhone).single();
     if (!m) {
       return res.status(404).json({ error: "Member not found" });
     }
@@ -781,6 +801,8 @@ async function startServer() {
       newSavings += tr.amount;
     } else if (tr.type === "loan") {
       newLoan += tr.amount;
+    } else if (tr.type === "repayment") {
+      newLoan = Math.max(0, newLoan - tr.amount);
     }
 
     // simple 10% interest on outstanding loan
@@ -794,7 +816,7 @@ async function startServer() {
         current_loan: newLoan,
         loan_repayment: loanRepayment,
       })
-      .eq("phone", tr.member_phone);
+      .eq("phone", normalizedPhone);
 
     if (memberUpdateErr) {
       console.error("Member balance update failed:", memberUpdateErr);
@@ -817,10 +839,11 @@ async function startServer() {
           msg += `\nNew Savings Balance: M${newSavings}`;
         } else if (tr.type === "loan") {
           msg += `\nNew Loan Balance: M${newLoan}`;
+        } else if (tr.type === "repayment") {
+          msg += `\nNew Loan Balance: M${newLoan}`;
         }
-        const cleanPhone = tr.member_phone.replace(/\D/g, "");
-        const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
-        await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: msg });
+        const cleanPhone = normalizePhone(normalizedPhone);
+        await sock.sendMessage(`${cleanPhone}@s.whatsapp.net`, { text: msg });
       } catch (waErr) {
         console.error("Failed to send approval WhatsApp:", waErr);
       }
@@ -844,9 +867,8 @@ async function startServer() {
     if (sock && connectionStatus === "open") {
       const adminName = req.session.user?.name || "Admin";
       let msg = `❌ Transaction rejected by ${adminName}.\nAmount: M${tr.amount}`;
-      const cleanPhone = tr.member_phone.replace(/\D/g, "");
-      const jid = cleanPhone.startsWith("266") || cleanPhone.startsWith("27") ? cleanPhone : "266" + cleanPhone;
-      await sock.sendMessage(`${jid}@s.whatsapp.net`, { text: msg });
+      const cleanPhone = normalizePhone(tr.member_phone);
+      await sock.sendMessage(`${cleanPhone}@s.whatsapp.net`, { text: msg });
     }
 
     res.json({ success: true });
@@ -857,6 +879,9 @@ async function startServer() {
   app.post("/api/members", requireAdmin, async (req, res) => {
     try {
       const memberData = req.body;
+      if (memberData.phone) {
+        memberData.phone = normalizePhone(memberData.phone);
+      }
       const { data, error } = await supabase.from("members").insert([memberData]).select().single();
       if (error) return res.status(500).json({ error: error.message });
       res.json(data);
@@ -868,13 +893,17 @@ async function startServer() {
   app.put("/api/members/:phone", requireAdmin, async (req, res) => {
     try {
       const { phone } = req.params;
+      const normalizedPhone = normalizePhone(phone);
       const memberData = req.body;
+      if (memberData.phone) {
+        memberData.phone = normalizePhone(memberData.phone);
+      }
 
       // Fetch the existing member data BEFORE we update it, to compute differences
-      const { data: oldMember } = await supabase.from("members").select("name, savings, current_loan").eq("phone", phone).single();
+      const { data: oldMember } = await supabase.from("members").select("name, savings, current_loan").eq("phone", normalizedPhone).single();
 
       // Update the member record
-      const { data, error } = await supabase.from("members").update(memberData).eq("phone", phone).select().single();
+      const { data, error } = await supabase.from("members").update(memberData).eq("phone", normalizedPhone).select().single();
       if (error) return res.status(500).json({ error: error.message });
 
       // If we successfully updated, check for financial alterations and record an audit transaction
@@ -891,7 +920,7 @@ async function startServer() {
 
         if (savingsDiff !== 0) {
           transactionsToInsert.push({
-            member_phone: phone,
+            member_phone: normalizedPhone,
             amount: savingsDiff, // Can be negative or positive
             type: "saving",
             status: "verified",
@@ -903,7 +932,7 @@ async function startServer() {
 
         if (loanDiff !== 0) {
           transactionsToInsert.push({
-            member_phone: phone,
+            member_phone: normalizedPhone,
             amount: loanDiff,
             type: "loan",
             status: "verified",
@@ -930,7 +959,8 @@ async function startServer() {
   app.delete("/api/members/:phone", requireAdmin, async (req, res) => {
     try {
       const { phone } = req.params;
-      const { error } = await supabase.from("members").delete().eq("phone", phone);
+      const normalizedPhone = normalizePhone(phone);
+      const { error } = await supabase.from("members").delete().eq("phone", normalizedPhone);
       if (error) return res.status(500).json({ error: error.message });
       res.json({ success: true });
     } catch (err) {
