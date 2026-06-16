@@ -660,9 +660,13 @@ async function startServer() {
         .select("amount, type, member_phone, members(name)")
         .eq("status", "verified");
 
-      if (startDate) query = query.gte("timestamp", startDate);
+      if (startDate) {
+        const formattedStart = startDate.includes("T") ? startDate : `${startDate}T00:00:00.000Z`;
+        query = query.gte("timestamp", formattedStart);
+      }
       if (endDate) {
-        query = query.lte("timestamp", `${endDate}T23:59:59.999Z`);
+        const formattedEnd = endDate.includes("T") ? endDate : `${endDate}T23:59:59.999Z`;
+        query = query.lte("timestamp", formattedEnd);
       }
 
       const { data, error } = await query;
