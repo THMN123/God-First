@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, QrCode, ShieldCheck, CheckCircle2, RefreshCw, ArrowRight, Lock, Cross, Copy, Check, KeyRound, Globe } from 'lucide-react';
+import { Smartphone, QrCode, ShieldCheck, CheckCircle2, RefreshCw, ArrowRight, Cross, Copy, Check, KeyRound, Globe } from 'lucide-react';
 import { WhatsAppStatus } from '../types';
 
 interface WhatsAppGatewayProps {
@@ -22,7 +22,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL_SECONDS);
   const [pairMode, setPairMode] = useState<'code' | 'qr'>('code');
   const [countryCode, setCountryCode] = useState<'27' | '266'>('27');
-  const [localNumber, setLocalNumber] = useState('829108820');
+  const [localNumber, setLocalNumber] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
 
@@ -188,7 +188,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                             type="text"
                             value={localNumber}
                             onChange={(e) => setLocalNumber(e.target.value)}
-                            placeholder="82 910 8820"
+                            placeholder="Enter your number"
                             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           />
                         </div>
@@ -213,24 +213,14 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                             </span>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(whatsappStatus.pairingCode || '')}
-                            className="py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-                          >
-                            {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedCode ? 'Copied!' : 'Copy'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onConfirmPair(getFullPhoneString())}
-                            className="py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Confirm Link</span>
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(whatsappStatus.pairingCode || '')}
+                          className="w-full py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                        >
+                          {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedCode ? 'Code Copied!' : 'Copy Pairing Code'}</span>
+                        </button>
                         <div className="text-[11px] text-slate-500 space-y-0.5 font-medium">
                           <p>1. Copy the code above</p>
                           <p>2. Open WhatsApp → Linked Devices</p>
@@ -277,17 +267,10 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
           </div>
         </div>
 
-        {/* Skip / Bypass link */}
-        <div className="text-center">
-          <button
-            type="button"
-            onClick={onAuthenticateAndProceed}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-700 transition-all"
-          >
-            <Lock className="w-3 h-3" />
-            <span>Skip — Enter portal without pairing</span>
-          </button>
-        </div>
+        {/* Footer */}
+        <p className="text-center text-[11px] text-slate-400 font-medium">
+          Secure Administrator Portal • God-First Financial System
+        </p>
 
       </div>
     </div>
