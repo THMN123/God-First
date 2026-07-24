@@ -226,7 +226,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                   <div className="md:col-span-6 flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-200 text-center space-y-3">
                     {whatsappStatus.pairingCode ? (
                       <div className="space-y-2 w-full">
-                        <span className="text-[11px] font-bold text-slate-500 tracking-wider uppercase">Your 8-Digit Code</span>
+                        <span className="text-[11px] font-bold text-slate-500 tracking-wider uppercase">Your WhatsApp Pairing Code</span>
                         <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-center">
                           <span className="text-2xl font-mono font-extrabold text-amber-900 tracking-widest">
                             {whatsappStatus.pairingCode}
@@ -240,17 +240,27 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                           {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{copiedCode ? 'Copied Code!' : 'Copy Code'}</span>
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => onConfirmPair(phoneNumber)}
+                          className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Entered Code in WhatsApp - Confirm Link</span>
+                        </button>
+
                         <ol className="text-[11px] text-slate-600 text-left space-y-1 pt-2 font-medium">
-                          <li>1. Open WhatsApp on this phone</li>
-                          <li>2. Go to <strong>Settings &gt; Linked Devices</strong></li>
-                          <li>3. Tap <strong>Link with phone number instead</strong> &amp; paste code!</li>
+                          <li>1. Copy 8-digit code above</li>
+                          <li>2. Open WhatsApp on this phone</li>
+                          <li>3. Go to <strong>Settings &gt; Linked Devices &gt; Link with phone number instead</strong> &amp; paste code!</li>
                         </ol>
                       </div>
                     ) : (
                       <div className="py-6 space-y-2">
                         <KeyRound className="w-8 h-8 text-slate-300 mx-auto" />
                         <p className="text-xs text-slate-500 font-medium max-w-xs">
-                          Enter your phone number on the left to generate your single-phone pairing code.
+                          Enter your phone number (e.g. 27829108820 or 0829108820) on the left to request your official WhatsApp pairing code.
                         </p>
                       </div>
                     )}

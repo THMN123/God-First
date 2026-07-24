@@ -395,25 +395,73 @@ async function startServer() {
         return res.status(400).json({ error: "Phone number is required for pairing code generation" });
       }
 
-      const cleanPhone = phone.replace(/[^0-9]/g, '');
-
-      if (!waSock || whatsappSession.status === 'DISCONNECTED') {
-        await connectToWhatsApp().catch(() => {});
+      // Convert local numbers e.g. 0829108820 -> 27829108820
+      let cleanPhone = phone.replace(/[^0-9]/g, '');
+      if (cleanPhone.startsWith('0') && cleanPhone.length === 10) {
+        cleanPhone = '27' + cleanPhone.substring(1);
       }
 
-      let code = "";
-      if (waSock && typeof (waSock as any).requestPairingCode === 'function') {
-        try {
-          code = await (waSock as any).requestPairingCode(cleanPhone);
-        } catch (e) {
-          console.log("Baileys requestPairingCode fallback:", e);
+      // Re-initialize socket if needed for clean pairing state
+      const authFolder = path.join(process.cwd(), 'baileys_auth_info');
+      if (!fs.existsSync(authFolder)) {
+        fs.mkdirSync(authFolder, { recursive: true });
+      }
+
+      const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+      const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1015901307] as [number, number, number] }));
+
+      if (waSock) {
+        try { waSock.end(undefined); } catch (e) {}
+        waSock = null;
+      }
+
+      waSock = makeWASocket({
+        version,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        auth: state,
+        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 60000,
+        keepAliveIntervalMs: 25000,
+      });
+
+      waSock.ev.on('creds.update', saveCreds);
+
+      waSock.ev.on('connection.update', async (update) => {
+        const { connection, qr } = update;
+        if (qr) {
+          try {
+            const qrDataUrl = await QRCode.toDataURL(qr, { margin: 2, width: 280 });
+            whatsappSession.qrCodeDataUrl = qrDataUrl;
+          } catch (e) {}
         }
+        if (connection === 'open') {
+          const rawUser = waSock?.user?.id || '';
+          const phoneDigits = rawUser.split(':')[0].split('@')[0];
+          whatsappSession = {
+            status: 'CONNECTED',
+            phoneNumber: phoneDigits ? `+${phoneDigits}` : `+${cleanPhone}`,
+            qrCodeDataUrl: undefined,
+            pairingCode: undefined,
+            connectedAt: new Date().toISOString()
+          };
+          console.log(`[WhatsApp] Paired successfully via pairing code for +${cleanPhone}`);
+        }
+      });
+
+      // Request official WhatsApp pairing code directly from Baileys
+      let code = "";
+      try {
+        code = await waSock.requestPairingCode(cleanPhone);
+      } catch (err) {
+        console.error("Baileys requestPairingCode error:", err);
       }
 
       if (!code) {
-        const randHex = Math.random().toString(36).substring(2, 6).toUpperCase();
-        const randNum = Math.floor(1000 + Math.random() * 9000);
-        code = `${randHex}-${randNum}`;
+        return res.status(500).json({
+          error: "WhatsApp server rejected pairing code request. Please verify the phone number includes international format (e.g. 27829108820) and try again."
+        });
       }
 
       whatsappSession = {
@@ -425,9 +473,9 @@ async function startServer() {
       };
 
       res.json(whatsappSession);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error requesting pairing code:', err);
-      res.status(500).json({ error: "Failed to generate pairing code" });
+      res.status(500).json({ error: err?.message || "Failed to generate official pairing code" });
     }
   });
 
