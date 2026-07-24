@@ -55,6 +55,26 @@ export default function App() {
     fetchAllData();
   }, []);
 
+  // Poll status every 2 seconds when on login screen so auto-redirection triggers as soon as WhatsApp connects
+  useEffect(() => {
+    if (isAuthenticatedGateway) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/whatsapp/status');
+        const waRes = await res.json();
+        if (waRes && waRes.status) {
+          setWhatsappStatus(waRes);
+          if (waRes.status === 'CONNECTED') {
+            setIsAuthenticatedGateway(true);
+          }
+        }
+      } catch (e) {}
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [isAuthenticatedGateway]);
+
   // WhatsApp Handlers
   const handleConnectWhatsApp = async () => {
     try {

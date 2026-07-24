@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, QrCode, ShieldCheck, CheckCircle2, RefreshCw, ArrowRight, Lock, Cross, Copy, Check, KeyRound } from 'lucide-react';
+import { Smartphone, QrCode, ShieldCheck, CheckCircle2, RefreshCw, ArrowRight, Lock, Cross, Copy, Check, KeyRound, Globe } from 'lucide-react';
 import { WhatsAppStatus } from '../types';
 
 interface WhatsAppGatewayProps {
@@ -21,11 +21,19 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
 }) => {
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL_SECONDS);
   const [pairMode, setPairMode] = useState<'code' | 'qr'>('code');
-  const [phoneNumber, setPhoneNumber] = useState('27829108820');
+  const [countryCode, setCountryCode] = useState<'27' | '266'>('27');
+  const [localNumber, setLocalNumber] = useState('829108820');
   const [copiedCode, setCopiedCode] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
 
   const isConnected = whatsappStatus.status === 'CONNECTED';
+
+  // Automated Redirection once authenticated
+  useEffect(() => {
+    if (isConnected) {
+      onAuthenticateAndProceed();
+    }
+  }, [isConnected, onAuthenticateAndProceed]);
 
   // Automated QR Code Generation on mount
   useEffect(() => {
@@ -53,13 +61,16 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
 
   const handleRequestCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber) return;
+    const cleanLocal = localNumber.replace(/[^0-9]/g, '').replace(/^0+/, '');
+    if (!cleanLocal) return;
+
+    const fullPhone = `${countryCode}${cleanLocal}`;
     setIsGeneratingCode(true);
     try {
       if (onRequestPairingCode) {
-        await onRequestPairingCode(phoneNumber);
+        await onRequestPairingCode(fullPhone);
       } else {
-        await onConfirmPair(`+${phoneNumber.replace(/[^0-9]/g, '')}`);
+        await onConfirmPair(`+${fullPhone}`);
       }
     } finally {
       setIsGeneratingCode(false);
@@ -70,6 +81,11 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const getFullPhoneString = () => {
+    const cleanLocal = localNumber.replace(/[^0-9]/g, '').replace(/^0+/, '');
+    return `+${countryCode} ${cleanLocal}`;
   };
 
   return (
@@ -140,7 +156,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
               <div className="space-y-1">
                 <h3 className="text-lg font-extrabold text-emerald-950">WhatsApp Connected Successfully!</h3>
                 <p className="text-xs text-emerald-700 font-medium">
-                  Active session paired with <span className="font-bold">{whatsappStatus.phoneNumber}</span>
+                  Redirecting to Admin Dashboard...
                 </p>
               </div>
               <button
@@ -193,21 +209,38 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                         Single-Phone WhatsApp Linking
                       </h4>
                       <p className="text-xs text-slate-500 mt-1">
-                        Enter your phone number to get an 8-digit code. You can enter this code directly inside WhatsApp on this phone!
+                        Select your country and enter your number to get an official 8-digit code.
                       </p>
                     </div>
 
                     <form onSubmit={handleRequestCode} className="space-y-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">WhatsApp Phone Number</label>
-                        <input
-                          type="text"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          placeholder="e.g. 27829108820"
-                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                        />
+                        <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                          <Globe className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Country &amp; Phone Number</span>
+                        </label>
+                        <div className="flex gap-2">
+                          {/* Country Code Dropdown with Flags */}
+                          <select
+                            value={countryCode}
+                            onChange={(e) => setCountryCode(e.target.value as '27' | '266')}
+                            className="px-2.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 shrink-0"
+                          >
+                            <option value="27">🇿🇦 +27 (SA)</option>
+                            <option value="266">🇱🇸 +266 (LS)</option>
+                          </select>
+
+                          {/* Local Phone Number Input */}
+                          <input
+                            type="text"
+                            value={localNumber}
+                            onChange={(e) => setLocalNumber(e.target.value)}
+                            placeholder="e.g. 82 910 8820"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                          />
+                        </div>
                       </div>
+
                       <button
                         type="submit"
                         disabled={isGeneratingCode}
@@ -218,7 +251,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                         ) : (
                           <KeyRound className="w-4 h-4" />
                         )}
-                        <span>Get 8-Digit Pairing Code</span>
+                        <span>Get 8-Digit Code for {countryCode === '27' ? '🇿🇦 +27' : '🇱🇸 +266'}</span>
                       </button>
                     </form>
                   </div>
@@ -243,7 +276,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => onConfirmPair(phoneNumber)}
+                          onClick={() => onConfirmPair(getFullPhoneString())}
                           className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -260,7 +293,7 @@ export const WhatsAppGateway: React.FC<WhatsAppGatewayProps> = ({
                       <div className="py-6 space-y-2">
                         <KeyRound className="w-8 h-8 text-slate-300 mx-auto" />
                         <p className="text-xs text-slate-500 font-medium max-w-xs">
-                          Enter your phone number (e.g. 27829108820 or 0829108820) on the left to request your official WhatsApp pairing code.
+                          Select country (🇿🇦 +27 or 🇱🇸 +266) and enter your number on the left to get your code.
                         </p>
                       </div>
                     )}
