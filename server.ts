@@ -76,13 +76,23 @@ let batchLogsHistory: BatchSendResult[] = [];
 let waSock: WASocket | null = null;
 let isConnecting = false;
 
-// Initialize or reconnect Baileys WhatsApp WebSocket
-// Initialize or reconnect Baileys WhatsApp WebSocket
-async function connectToWhatsApp(): Promise<void> {
+// Initialize or reconnect Baileys WhatsApp WebSocket (supports both QR code and pairing code)
+async function connectToWhatsApp(phoneForPairingCode?: string): Promise<string | void> {
+  // If already connected, return
   if (waSock && whatsappSession.status === 'CONNECTED') {
     return;
   }
-  if (isConnecting) return;
+
+  // Clear existing socket if re-initializing or switching modes
+  if (waSock) {
+    try {
+      waSock.ev.removeAllListeners('connection.update');
+      waSock.ev.removeAllListeners('creds.update');
+      waSock.end(undefined);
+    } catch (e) {}
+    waSock = null;
+  }
+
   isConnecting = true;
 
   try {
@@ -139,7 +149,7 @@ async function connectToWhatsApp(): Promise<void> {
       if (connection === 'open') {
         const rawUser = waSock?.user?.id || '';
         const phoneDigits = rawUser.split(':')[0].split('@')[0];
-        const formattedPhone = phoneDigits ? `+${phoneDigits}` : '+27 82 910 8820';
+        const formattedPhone = phoneDigits ? `+${phoneDigits}` : (whatsappSession.phoneNumber || '+27 82 910 8820');
 
         whatsappSession = {
           status: 'CONNECTED',
@@ -183,6 +193,14 @@ async function connectToWhatsApp(): Promise<void> {
         }
       }
     });
+
+    // If phone number is requested for pairing code mode
+    if (phoneForPairingCode) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const code = await waSock.requestPairingCode(phoneForPairingCode);
+      isConnecting = false;
+      return code;
+    }
 
   } catch (err) {
     console.error('Error in connectToWhatsApp:', err);
@@ -384,79 +402,17 @@ async function startServer() {
         cleanPhone = '27' + cleanPhone.substring(1);
       }
 
-      // CRITICAL: Pairing codes require a FRESH socket with NO prior QR emission.
-      // Kill any existing socket first.
-      if (waSock) {
-        try { waSock.end(undefined); } catch (e) {}
-        waSock = null;
-        isConnecting = false;
-      }
+      const code = await connectToWhatsApp(cleanPhone);
 
-      const authFolder = path.join(process.cwd(), 'baileys_auth_info');
-      if (!fs.existsSync(authFolder)) {
-        fs.mkdirSync(authFolder, { recursive: true });
-      }
-
-      const { state, saveCreds } = await useMultiFileAuthState(authFolder);
-      const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1015901307] as [number, number, number] }));
-
-      // Create a fresh socket — DO NOT let it emit QR before we call requestPairingCode
-      const pairSock = makeWASocket({
-        version,
-        logger: pino({ level: 'silent' }),
-        printQRInTerminal: false,
-        auth: state,
-        browser: ['Ubuntu', 'Chrome', '20.0.04'],
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
-        keepAliveIntervalMs: 25000,
-      });
-
-      waSock = pairSock;
-      pairSock.ev.on('creds.update', saveCreds);
-
-      // Listen for connection open (triggers after user enters code in WhatsApp)
-      pairSock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'open') {
-          const rawUser = pairSock?.user?.id || '';
-          const phoneDigits = rawUser.split(':')[0].split('@')[0];
-          whatsappSession = {
-            status: 'CONNECTED',
-            phoneNumber: phoneDigits ? `+${phoneDigits}` : `+${cleanPhone}`,
-            qrCodeDataUrl: undefined,
-            pairingCode: undefined,
-            connectedAt: new Date().toISOString()
-          };
-          console.log(`[Pairing] Connected via code for +${cleanPhone}`);
-        }
-        if (connection === 'close') {
-          const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-          if (statusCode !== DisconnectReason.loggedOut) {
-            // Do not auto-reconnect in pairing code mode — let user retry
-            whatsappSession = { ...whatsappSession, status: 'PAIRING', connectedAt: undefined };
-          }
-          isConnecting = false;
-        }
-      });
-
-      // Wait a tick for socket to initialize, THEN request pairing code
-      // requestPairingCode MUST be called before any QR is generated
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      let code = "";
-      try {
-        code = await pairSock.requestPairingCode(cleanPhone);
-      } catch (err: any) {
-        console.error("[Pairing] requestPairingCode failed:", err?.message || err);
+      if (!code) {
         return res.status(500).json({
-          error: `WhatsApp rejected this number: ${err?.message || 'Check the number and try again.'}`
+          error: "Failed to generate pairing code. Please check your phone number format (e.g. 27829108820) and try again."
         });
       }
 
       whatsappSession = {
         status: 'PAIRING',
-        pairingCode: code,
+        pairingCode: code as string,
         phoneNumber: `+${cleanPhone}`,
         qrCodeDataUrl: undefined,
         connectedAt: undefined
