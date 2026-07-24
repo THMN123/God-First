@@ -77,9 +77,9 @@ let waSock: WASocket | null = null;
 let isConnecting = false;
 
 // Initialize or reconnect Baileys WhatsApp WebSocket (supports both QR code and pairing code)
-async function connectToWhatsApp(phoneForPairingCode?: string): Promise<string | void> {
-  // If already connected, return
-  if (waSock && whatsappSession.status === 'CONNECTED') {
+async function connectToWhatsApp(phoneForPairingCode?: string, forceReset = false): Promise<string | void> {
+  // If already connected and not forcing reset, return
+  if (waSock && whatsappSession.status === 'CONNECTED' && !forceReset && !phoneForPairingCode) {
     return;
   }
 
@@ -97,6 +97,14 @@ async function connectToWhatsApp(phoneForPairingCode?: string): Promise<string |
 
   try {
     const authFolder = path.join(process.cwd(), 'baileys_auth_info');
+
+    // If requesting a pairing code or forcing reset, clear stale auth state to ensure clean un-registered socket
+    if ((phoneForPairingCode || forceReset) && fs.existsSync(authFolder)) {
+      try {
+        fs.rmSync(authFolder, { recursive: true, force: true });
+      } catch (e) {}
+    }
+
     if (!fs.existsSync(authFolder)) {
       fs.mkdirSync(authFolder, { recursive: true });
     }
@@ -178,9 +186,6 @@ async function connectToWhatsApp(phoneForPairingCode?: string): Promise<string |
             pairingCode: whatsappSession.pairingCode,
             connectedAt: undefined
           };
-          setTimeout(() => {
-            connectToWhatsApp();
-          }, 3000);
         } else {
           whatsappSession = {
             status: 'DISCONNECTED',
@@ -196,8 +201,11 @@ async function connectToWhatsApp(phoneForPairingCode?: string): Promise<string |
 
     // If phone number is requested for pairing code mode
     if (phoneForPairingCode) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const code = await waSock.requestPairingCode(phoneForPairingCode);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      let code = "";
+      if (waSock) {
+        code = await waSock.requestPairingCode(phoneForPairingCode);
+      }
       isConnecting = false;
       return code;
     }
@@ -375,6 +383,24 @@ async function startServer() {
   // WhatsApp Session API
   app.get("/api/whatsapp/status", (req, res) => {
     res.json(whatsappSession);
+  });
+
+  app.post("/api/whatsapp/reset", async (req, res) => {
+    try {
+      if (waSock) {
+        try { waSock.end(undefined); } catch (e) {}
+        waSock = null;
+      }
+      const authFolder = path.join(process.cwd(), 'baileys_auth_info');
+      if (fs.existsSync(authFolder)) {
+        try { fs.rmSync(authFolder, { recursive: true, force: true }); } catch (e) {}
+      }
+      whatsappSession = { status: 'DISCONNECTED' };
+      await connectToWhatsApp(undefined, true);
+      res.json(whatsappSession);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to reset WhatsApp session" });
+    }
   });
 
   app.post("/api/whatsapp/connect", async (req, res) => {
