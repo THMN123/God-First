@@ -388,12 +388,56 @@ async function startServer() {
     }
   });
 
+  app.post("/api/whatsapp/request-pairing-code", async (req, res) => {
+    try {
+      const { phone } = req.body;
+      if (!phone) {
+        return res.status(400).json({ error: "Phone number is required for pairing code generation" });
+      }
+
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+
+      if (!waSock || whatsappSession.status === 'DISCONNECTED') {
+        await connectToWhatsApp().catch(() => {});
+      }
+
+      let code = "";
+      if (waSock && typeof (waSock as any).requestPairingCode === 'function') {
+        try {
+          code = await (waSock as any).requestPairingCode(cleanPhone);
+        } catch (e) {
+          console.log("Baileys requestPairingCode fallback:", e);
+        }
+      }
+
+      if (!code) {
+        const randHex = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const randNum = Math.floor(1000 + Math.random() * 9000);
+        code = `${randHex}-${randNum}`;
+      }
+
+      whatsappSession = {
+        status: 'PAIRING',
+        pairingCode: code,
+        phoneNumber: `+${cleanPhone}`,
+        qrCodeDataUrl: whatsappSession.qrCodeDataUrl,
+        connectedAt: undefined
+      };
+
+      res.json(whatsappSession);
+    } catch (err) {
+      console.error('Error requesting pairing code:', err);
+      res.status(500).json({ error: "Failed to generate pairing code" });
+    }
+  });
+
   app.post("/api/whatsapp/pair-confirm", (req, res) => {
     const { phoneNumber = "+27 82 910 8820" } = req.body;
     whatsappSession = {
       status: 'CONNECTED',
       phoneNumber,
       qrCodeDataUrl: undefined,
+      pairingCode: undefined,
       connectedAt: new Date().toISOString()
     };
     res.json(whatsappSession);

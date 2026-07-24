@@ -26,6 +26,7 @@ export interface WhatsAppStatus {
   status: 'DISCONNECTED' | 'PAIRING' | 'CONNECTED';
   phoneNumber?: string;
   qrCodeDataUrl?: string;
+  pairingCode?: string;
   connectedAt?: string;
 }
 

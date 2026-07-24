@@ -83,6 +83,21 @@ export default function App() {
     }
   };
 
+  const handleRequestPairingCode = async (phone: string) => {
+    try {
+      const res = await fetch('/api/whatsapp/request-pairing-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      setWhatsappStatus(data);
+      return data;
+    } catch (err) {
+      console.error('Failed to request pairing code:', err);
+    }
+  };
+
   const handleDisconnectWhatsApp = async () => {
     try {
       const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
@@ -204,6 +219,7 @@ export default function App() {
         whatsappStatus={whatsappStatus}
         onConnectWhatsApp={handleConnectWhatsApp}
         onConfirmPair={handleConfirmPair}
+        onRequestPairingCode={handleRequestPairingCode}
         onAuthenticateAndProceed={() => setIsAuthenticatedGateway(true)}
       />
     );
