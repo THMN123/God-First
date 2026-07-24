@@ -196,10 +196,22 @@ async function startServer() {
   // Trigger initial WhatsApp initialization gracefully
   connectToWhatsApp().catch(err => console.error('Initial WhatsApp startup error:', err));
 
-  // API Routes
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", appName: "God-First Savings & Loans" });
+  // API Routes & Ping Keep-Alive Endpoints
+  app.get(["/ping", "/api/ping", "/api/health"], (req, res) => {
+    res.status(200).json({ status: "ok", appName: "God-First Savings & Loans", timestamp: new Date().toISOString() });
   });
+
+  // Self-ping interval worker (pings https://god-first.onrender.com every 10 minutes to prevent Render idle sleep)
+  const KEEP_ALIVE_URL = process.env.APP_URL || "https://god-first.onrender.com/ping";
+  setInterval(async () => {
+    try {
+      await fetch(KEEP_ALIVE_URL);
+      console.log(`[KeepAlive Cron] Pinged ${KEEP_ALIVE_URL} successfully at ${new Date().toISOString()}`);
+    } catch (err) {
+      console.error("[KeepAlive Cron] Ping error:", err);
+    }
+  }, 10 * 60 * 1000);
+
 
   // Members API
   app.get("/api/members", (req, res) => {

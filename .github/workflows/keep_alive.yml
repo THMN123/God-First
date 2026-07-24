@@ -1,0 +1,17 @@
+name: Keep Alive Cron Job
+
+on:
+  schedule:
+    # Run every 10 minutes continuously
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping God-First App Endpoint
+        run: |
+          echo "Pinging https://god-first.onrender.com/ping..."
+          curl -s -f -m 30 https://god-first.onrender.com/ping || curl -s -f -m 30 https://god-first.onrender.com/
+          echo "Ping successful! App warm and active."
