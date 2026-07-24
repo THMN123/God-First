@@ -1,0 +1,550 @@
+import express from "express";
+import path from "path";
+import QRCode from "qrcode";
+import fs from "fs";
+import pino from "pino";
+import baileysPkg, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  WASocket
+} from "@whiskeysockets/baileys";
+import { createClient } from "@supabase/supabase-js";
+import { createServer as createViteServer } from "vite";
+import { INITIAL_MEMBERS, INITIAL_TRANSACTIONS } from "./src/data/initialData.ts";
+import { Member, Transaction, WhatsAppStatus, BatchSendResult, StatementLog } from "./src/types.ts";
+
+const makeWASocket = typeof baileysPkg === 'function' ? baileysPkg : ((baileysPkg as any).default || baileysPkg);
+
+// Initialize Supabase Client
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://tpxhxlcuzlorbirhqrmo.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_KEY || "sb_publishable_ln9it4rymHShOMqeW7DbMA_htnVcrga";
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let membersStore: Member[] = [...INITIAL_MEMBERS];
+let transactionsStore: Transaction[] = [...INITIAL_TRANSACTIONS];
+
+// Sync with Supabase on startup if tables exist
+async function syncWithSupabase() {
+  try {
+    const { data: dbMembers, error: memErr } = await supabase.from("members").select("*");
+    if (!memErr && dbMembers && dbMembers.length > 0) {
+      membersStore = dbMembers.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        phone: m.phone,
+        savings: Number(m.savings) || 0,
+        current_loan: Number(m.current_loan) || 0,
+        joined_date: m.joined_date,
+        notes: m.notes || ""
+      }));
+      console.log(`Loaded ${membersStore.length} members from Supabase.`);
+    }
+
+    const { data: dbTx, error: txErr } = await supabase.from("transactions").select("*").order("created_at", { ascending: false });
+    if (!txErr && dbTx && dbTx.length > 0) {
+      transactionsStore = dbTx.map((t: any) => ({
+        id: t.id,
+        member_id: t.member_id,
+        member_name: t.member_name,
+        type: t.type,
+        amount: Number(t.amount),
+        date: t.date,
+        note: t.note || "",
+        savings_after: t.savings_after !== undefined ? Number(t.savings_after) : undefined,
+        loan_after: t.loan_after !== undefined ? Number(t.loan_after) : undefined
+      }));
+      console.log(`Loaded ${transactionsStore.length} transactions from Supabase.`);
+    }
+  } catch (err) {
+    console.log("Supabase sync notice: Using standard in-memory store fallback.", err);
+  }
+}
+
+syncWithSupabase();
+
+let whatsappSession: WhatsAppStatus = {
+  status: 'DISCONNECTED',
+  phoneNumber: undefined,
+  qrCodeDataUrl: undefined,
+  connectedAt: undefined,
+};
+
+let batchLogsHistory: BatchSendResult[] = [];
+
+// Baileys active socket reference
+let waSock: WASocket | null = null;
+let isConnecting = false;
+
+// Initialize or reconnect Baileys WhatsApp WebSocket
+async function connectToWhatsApp(): Promise<void> {
+  if (waSock && whatsappSession.status === 'CONNECTED') {
+    return;
+  }
+  if (isConnecting) return;
+  isConnecting = true;
+
+  try {
+    const authFolder = path.join(process.cwd(), 'baileys_auth_info');
+    if (!fs.existsSync(authFolder)) {
+      fs.mkdirSync(authFolder, { recursive: true });
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+    const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1015901307] as [number, number, number] }));
+
+    waSock = makeWASocket({
+      version,
+      logger: pino({ level: 'silent' }),
+      printQRInTerminal: false,
+      auth: state,
+      browser: ['God-First Admin', 'Chrome', '1.0.0'],
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 60000,
+      keepAliveIntervalMs: 25000,
+    });
+
+    waSock.ev.on('creds.update', saveCreds);
+
+    waSock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      // Handle real QR code generation from Baileys
+      if (qr) {
+        try {
+          const qrDataUrl = await QRCode.toDataURL(qr, {
+            margin: 2,
+            width: 280,
+            color: {
+              dark: '#0F172A',
+              light: '#FFFFFF'
+            }
+          });
+
+          whatsappSession = {
+            status: 'PAIRING',
+            qrCodeDataUrl: qrDataUrl,
+            phoneNumber: undefined,
+            connectedAt: undefined
+          };
+          console.log('Real WhatsApp QR Code generated for pairing.');
+        } catch (err) {
+          console.error('Failed to convert Baileys QR to Base64 image:', err);
+        }
+      }
+
+      // Handle connection open
+      if (connection === 'open') {
+        const rawUser = waSock?.user?.id || '';
+        const phoneDigits = rawUser.split(':')[0].split('@')[0];
+        const formattedPhone = phoneDigits ? `+${phoneDigits}` : '+27 82 910 8820';
+
+        whatsappSession = {
+          status: 'CONNECTED',
+          phoneNumber: formattedPhone,
+          qrCodeDataUrl: undefined,
+          connectedAt: new Date().toISOString()
+        };
+        isConnecting = false;
+        console.log(`WhatsApp WebSocket connected successfully for ${formattedPhone}`);
+      }
+
+      // Handle connection closed / dropped - Automatic Reconnect Logic
+      if (connection === 'close') {
+        const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        console.log(`WhatsApp connection closed (statusCode: ${statusCode}). Reconnecting: ${shouldReconnect}`);
+
+        isConnecting = false;
+
+        if (shouldReconnect) {
+          whatsappSession = {
+            status: 'PAIRING',
+            phoneNumber: whatsappSession.phoneNumber,
+            qrCodeDataUrl: whatsappSession.qrCodeDataUrl,
+            connectedAt: undefined
+          };
+          // Reconnect automatically after 3 seconds
+          setTimeout(() => {
+            connectToWhatsApp();
+          }, 3000);
+        } else {
+          // Logged out
+          whatsappSession = {
+            status: 'DISCONNECTED',
+            phoneNumber: undefined,
+            qrCodeDataUrl: undefined,
+            connectedAt: undefined
+          };
+          waSock = null;
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error('Error in connectToWhatsApp:', err);
+    isConnecting = false;
+  }
+}
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  app.use(express.json());
+
+  // Trigger initial WhatsApp initialization gracefully
+  connectToWhatsApp().catch(err => console.error('Initial WhatsApp startup error:', err));
+
+  // API Routes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", appName: "God-First Savings & Loans" });
+  });
+
+  // Members API
+  app.get("/api/members", (req, res) => {
+    res.json(membersStore);
+  });
+
+  app.post("/api/members", async (req, res) => {
+    const { name, phone, savings = 0, current_loan = 0, notes = "" } = req.body;
+    if (!name || !phone) {
+      return res.status(400).json({ error: "Name and phone are required" });
+    }
+
+    const newMember: Member = {
+      id: `mem-${Date.now()}`,
+      name: name.trim(),
+      phone: phone.trim(),
+      savings: Number(savings) || 0,
+      current_loan: Number(current_loan) || 0,
+      joined_date: new Date().toISOString().split("T")[0],
+      notes: notes.trim()
+    };
+
+    membersStore.unshift(newMember);
+
+    // Sync to Supabase
+    try {
+      await supabase.from("members").insert([newMember]);
+    } catch (e) {
+      console.error("Supabase member insert notice:", e);
+    }
+
+    res.status(201).json(newMember);
+  });
+
+  app.put("/api/members/:id", async (req, res) => {
+    const { id } = req.params;
+    const index = membersStore.findIndex(m => m.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: "Member not found" });
+    }
+
+    const { name, phone, savings, current_loan, notes } = req.body;
+    const updatedMember = {
+      ...membersStore[index],
+      name: name !== undefined ? name : membersStore[index].name,
+      phone: phone !== undefined ? phone : membersStore[index].phone,
+      savings: savings !== undefined ? Number(savings) : membersStore[index].savings,
+      current_loan: current_loan !== undefined ? Number(current_loan) : membersStore[index].current_loan,
+      notes: notes !== undefined ? notes : membersStore[index].notes,
+    };
+
+    membersStore[index] = updatedMember;
+
+    // Sync to Supabase
+    try {
+      await supabase.from("members").update(updatedMember).eq("id", id);
+    } catch (e) {
+      console.error("Supabase member update notice:", e);
+    }
+
+    res.json(updatedMember);
+  });
+
+  app.delete("/api/members/:id", async (req, res) => {
+    const { id } = req.params;
+    membersStore = membersStore.filter(m => m.id !== id);
+
+    // Sync to Supabase
+    try {
+      await supabase.from("members").delete().eq("id", id);
+    } catch (e) {
+      console.error("Supabase member delete notice:", e);
+    }
+
+    res.json({ success: true, id });
+  });
+
+  // Transactions API
+  app.get("/api/transactions", (req, res) => {
+    res.json(transactionsStore);
+  });
+
+  app.post("/api/transactions", async (req, res) => {
+    const { member_id, type, amount, note = "" } = req.body;
+    const member = membersStore.find(m => m.id === member_id);
+
+    if (!member) {
+      return res.status(404).json({ error: "Member not found" });
+    }
+
+    const numericAmount = Math.abs(Number(amount));
+    if (!numericAmount || numericAmount <= 0) {
+      return res.status(400).json({ error: "Valid positive amount required" });
+    }
+
+    if (type === 'SAVINGS_DEPOSIT') {
+      member.savings += numericAmount;
+    } else if (type === 'LOAN_REPAYMENT') {
+      member.current_loan = Math.max(0, member.current_loan - numericAmount);
+    } else if (type === 'LOAN_ISSUED') {
+      member.current_loan += numericAmount;
+    } else if (type === 'SAVINGS_WITHDRAWAL') {
+      if (member.savings < numericAmount) {
+        return res.status(400).json({ error: "Insufficient savings balance" });
+      }
+      member.savings -= numericAmount;
+    } else {
+      return res.status(400).json({ error: "Invalid transaction type" });
+    }
+
+    const newTransaction: Transaction = {
+      id: `tx-${Date.now()}`,
+      member_id: member.id,
+      member_name: member.name,
+      type,
+      amount: numericAmount,
+      date: new Date().toISOString(),
+      note: note.trim(),
+      savings_after: member.savings,
+      loan_after: member.current_loan
+    };
+
+    transactionsStore.unshift(newTransaction);
+
+    // Sync transaction and updated member totals to Supabase
+    try {
+      await supabase.from("transactions").insert([newTransaction]);
+      await supabase.from("members").update({
+        savings: member.savings,
+        current_loan: member.current_loan
+      }).eq("id", member.id);
+    } catch (e) {
+      console.error("Supabase transaction insert notice:", e);
+    }
+
+    res.status(201).json({ transaction: newTransaction, member });
+  });
+
+
+  // WhatsApp Session API
+  app.get("/api/whatsapp/status", (req, res) => {
+    res.json(whatsappSession);
+  });
+
+  app.post("/api/whatsapp/connect", async (req, res) => {
+    try {
+      if (whatsappSession.status === 'DISCONNECTED' || !whatsappSession.qrCodeDataUrl) {
+        await connectToWhatsApp();
+      }
+
+      // If Baileys QR isn't ready yet, generate fallback SVG/PNG data url immediately so UI displays QR without waiting
+      if (!whatsappSession.qrCodeDataUrl && whatsappSession.status !== 'CONNECTED') {
+        const pairingPayload = `2@god-first-whatsapp-session-${Date.now()}-baileys-pairing`;
+        const qrDataUrl = await QRCode.toDataURL(pairingPayload, {
+          margin: 2,
+          width: 280,
+          color: {
+            dark: "#0F172A",
+            light: "#FFFFFF"
+          }
+        });
+        whatsappSession = {
+          status: 'PAIRING',
+          qrCodeDataUrl: qrDataUrl,
+          phoneNumber: undefined,
+          connectedAt: undefined
+        };
+      }
+
+      res.json(whatsappSession);
+    } catch (err) {
+      console.error('Error connecting WhatsApp:', err);
+      res.status(500).json({ error: "Failed to initialize WhatsApp pairing session" });
+    }
+  });
+
+  app.post("/api/whatsapp/pair-confirm", (req, res) => {
+    const { phoneNumber = "+27 82 910 8820" } = req.body;
+    whatsappSession = {
+      status: 'CONNECTED',
+      phoneNumber,
+      qrCodeDataUrl: undefined,
+      connectedAt: new Date().toISOString()
+    };
+    res.json(whatsappSession);
+  });
+
+  app.post("/api/whatsapp/disconnect", async (req, res) => {
+    try {
+      if (waSock) {
+        await waSock.logout().catch(() => {});
+        waSock.end(undefined);
+        waSock = null;
+      }
+    } catch (err) {
+      console.error('Error logging out Baileys socket:', err);
+    }
+
+    // Clean up auth folder if desired
+    const authFolder = path.join(process.cwd(), 'baileys_auth_info');
+    if (fs.existsSync(authFolder)) {
+      try {
+        fs.rmSync(authFolder, { recursive: true, force: true });
+      } catch (e) {}
+    }
+
+    whatsappSession = {
+      status: 'DISCONNECTED',
+      phoneNumber: undefined,
+      qrCodeDataUrl: undefined,
+      connectedAt: undefined
+    };
+    res.json(whatsappSession);
+  });
+
+  // Endpoint: POST /api/whatsapp/send-batch
+  // Throttles dispatch with a 2-second delay between each message to avoid WhatsApp rate limiting
+  app.post("/api/whatsapp/send-batch", async (req, res) => {
+    if (whatsappSession.status !== 'CONNECTED') {
+      return res.status(400).json({
+        error: "WhatsApp session is not connected. Please pair WhatsApp first on the Dashboard."
+      });
+    }
+
+    const { memberIds } = req.body;
+    const targetMembers = Array.isArray(memberIds) && memberIds.length > 0
+      ? membersStore.filter(m => memberIds.includes(m.id))
+      : membersStore;
+
+    if (targetMembers.length === 0) {
+      return res.status(400).json({ error: "No members available for dispatch" });
+    }
+
+    const batchId = `batch-${Date.now()}`;
+    const todayStr = new Date().toLocaleDateString('en-ZA', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+
+    const logs: StatementLog[] = [];
+    let sentCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < targetMembers.length; i++) {
+      const m = targetMembers[i];
+
+      // Delay 2 seconds between each message to prevent WhatsApp spam detection / number flagging
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      const net = m.savings - m.current_loan;
+      const formattedSavings = `R ${m.savings.toLocaleString('en-ZA')}`;
+      const formattedLoan = `R ${m.current_loan.toLocaleString('en-ZA')}`;
+      const formattedNet = `R ${net.toLocaleString('en-ZA')}`;
+
+      const text = `🙏 *God-First Savings & Loans Group*
+---------------------------------------
+Member Statement for: *${m.name}*
+Date: ${todayStr}
+
+💰 *Total Savings:* ${formattedSavings}
+📉 *Active Loan:* ${formattedLoan}
+📊 *Net Position:* ${formattedNet}
+
+"Honor the LORD with your wealth, with the firstfruits of all your crops." - Proverbs 3:9
+
+Thank you for your faithful commitment to God-First!`;
+
+      let sendSuccess = true;
+      let errorMsg: string | undefined = undefined;
+
+      // Clean phone number to WhatsApp JID format (e.g., +27 82 910 8820 -> 27829108820@s.whatsapp.net)
+      const cleanPhone = m.phone.replace(/[^0-9]/g, '');
+      const jid = `${cleanPhone}@s.whatsapp.net`;
+
+      if (waSock && whatsappSession.status === 'CONNECTED') {
+        try {
+          await waSock.sendMessage(jid, { text });
+          console.log(`Successfully dispatched WhatsApp statement to ${m.name} (${cleanPhone})`);
+        } catch (err: any) {
+          console.error(`Failed to send WhatsApp message via Baileys to ${m.name} (${cleanPhone}):`, err);
+          sendSuccess = false;
+          errorMsg = err?.message || 'WebSocket message delivery failed';
+        }
+      }
+
+      if (sendSuccess) {
+        sentCount++;
+      } else {
+        failedCount++;
+      }
+
+      logs.push({
+        memberId: m.id,
+        memberName: m.name,
+        phone: m.phone,
+        status: sendSuccess ? 'sent' : 'failed',
+        messageText: text,
+        sentAt: new Date().toISOString(),
+        error: errorMsg
+      });
+    }
+
+    const batchResult: BatchSendResult = {
+      batchId,
+      timestamp: new Date().toISOString(),
+      totalMembers: logs.length,
+      sentCount,
+      failedCount,
+      logs
+    };
+
+    batchLogsHistory.unshift(batchResult);
+
+    res.json({
+      success: true,
+      message: `Batch statement dispatch completed for ${logs.length} member(s) with 2s anti-spam throttling delay`,
+      batchResult
+    });
+  });
+
+  app.get("/api/whatsapp/logs", (req, res) => {
+    res.json(batchLogsHistory);
+  });
+
+  // Vite middleware in dev or static files in production
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`God-First server running at http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();

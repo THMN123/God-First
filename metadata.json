@@ -1,0 +1,6 @@
+{
+  "name": "God-First Savings & Loans",
+  "description": "Apple iOS-styled web application for managing members, savings, loans, and sending batch WhatsApp balance statements.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
